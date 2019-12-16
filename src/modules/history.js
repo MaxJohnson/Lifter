@@ -31,7 +31,7 @@
             // Use historyId directly
             ref.putIdentifier(c2id('HstS'), historyId);
         }
-    };
+    }
 
     /** Traverse history in the specified direction, selecting the according history state. @private */
     function _traverseHistory(direction)
@@ -42,7 +42,7 @@
         desc.putReference(c2id('null'), ref);
         executeAction(c2id('slct'), desc, _dialogModesNo);
         return this;
-    };
+    }
 
 
     /**
@@ -81,7 +81,7 @@
         },
     };
 
-    /** 
+    /**
      * Gets the number of history states for the currently active document.
      * @return Number of history states for the currently active document.
      */
@@ -227,7 +227,7 @@
             {
                 // Set
                 if (!prop.set)
-                    throw new Error(['Property "', name, '" is read-only.'].join(''));;
+                    throw new Error(['Property "', name, '" is read-only.'].join(''));
 
                 // Set value
                 prop.set.call(null, prop, historyId, value);

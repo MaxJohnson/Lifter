@@ -1,0 +1,660 @@
+/*
+MIT License
+
+Copyright (c) 2019 Max Johnson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
+/*
+
+# Summary
+ A helper Class for quick ScriptUI dialogs in Adobe ExtendScript with UMD wrapper for cross-compatability with AMD and node.js require.
+
+The idea being to replace native dialogs with prettier ScriptUI versions that have optional additional functionality and customization. Plus a dropdown menu dialog... cause I use that a lot too.
+
+Basically I got tired of rewriting an alert that has a "Do not ask again" checkbox.
+
+All dialogs function like the native version *or* accept an options object with custom arguments with default settings as fallbacks.
+
+Quick example of a confirmation dialog that has three buttons and a skip-me checkbox...
+```
+var weapon = confirm({text:"Kill it with...", skippable:true, buttons:["Boredom","Fire","Hugs"]});
+// returns the index number of the button selected.
+```
+
+# Features
+- Works with node.js require, AMD(probably), and vanilla ExtendScript.
+- Tries to simplify basic dialog creation to a couple lines.
+- Retrievable dialog cache (for skippable dialogs!)
+- Optionally replace native Javascript dialogs
+- Easily attach to the `$.global` space or your own namespace in a `Dialogs` object
+
+# Import
+## NPM
+If running Node NPM, you can `npm install ExtendScript_Dialogs` to add to your node_modules folder
+## github
+Clone or download the repo and copy the extendscript_dialogs.jsxinc to your project
+
+# Include
+
+## NPM
+`var Dialogs = require("ExtendScript_Dialogs");`
+
+## AMD
+I don't know but it's probably not difficult? Firmly in the untested-but-should-work category
+
+## ExtendScript
+### Eval into environment
+`$.evalFile("<path>/extendscript_dialogs.jsxinc")`
+
+### Include in scripts
+`//@include "<path>/extendscript_dialogs.jsxinc"`
+
+### concatinate or copy-paste directly
+Add to a build script or, I dunno, just copy-pasta it in there?
+
+# Use:
+
+## Initialize Dialogs object
+Make a "new" ExtendScript_Dialogs. *Note: check the constructor options below for how to override native dialogs.*
+
+You can either pass a root object to attach the Dialogs object to, or directly capture the Dialogs object in a variable. Or both?
+```
+var myDialogDad = {};
+var myDialogs = new ExtendScript_Dialogs(myDialogDad);// two ways to attach Dialogs object...through root arg or return capture
+myDialogs.alert('Whatever dad. I don't need you.');
+myDialogDad.Dialogs.alert('Can I borrow the car?');// hint, it's the same Dialogs object...
+```
+### Constructor options
+"new" constructor takes 2 optional arguments.
+
+First argument is an alternate root object to tack on a 'Dialogs' alias.
+
+By passing $.global as first arg, we get global Dialogs object!
+```
+var root = $.global;// root to add convenience aliases to
+var overrideNative = false;// replace native dialogs or not
+
+myDialogs = new ExtendScript_Dialogs(root, overrideNative);
+
+Dialogs.alert('Like magic.');
+Dialogs.dropdown(["Thing 1","Thing 2"]);
+```
+
+The second argument is whether or not to replace native JS dialogs with prettier ExtendScript versions.
+```
+// don't care about the Dialogs object right now... just native stuff
+new ExtendScript_Dialogs(null, true);
+
+alert('I've been overridden!');
+var myBool = confirm('Do the thing?');
+var myText = prompt('What to say?','Replace these words...');
+```
+
+## Dialog Types
+### Alert
+The alert dialog has a variable-typed parameter to either mimic native Alert or add customization.
+Options:
+* title: title string
+* text: static text string message
+* id: id number for retrieval from the cache
+* skippable: whether or not to add a "Do not ask again" checkbox
+
+```
+
+ new ExtendScript_Dialogs($.global, true);
+ alert("Beware!");
+ alert({text:"Beware!"});
+```
+
+### Confirm
+The confirm dialog has a variable-typed first parameter to either mimic native Confirm or add customization.
+
+Note: If you pass an options object as first argument, it returns the button number (0, 1, 2, etc) instead of a boolean value.
+
+Options Object:
+* title: title string
+* text: static text string message
+* id: id number for retrieval from the cache
+* skippable: whether or not to add a "Do not ask again" checkbox
+* buttons: a string array that is converted to buttons on the bottom of the dialog. First is "dismiss" function and last is "confirm" by default.
+
+```
+ new ExtendScript_Dialogs($.global, true);
+ var killCheck = confirm("Should I do it?");// returns true/false
+
+ // for more complex choices...
+ var weapon = confirm({text:"Kill it with...", skippable:true, buttons:["Boredom","Fire","Hugs"]});
+ // returns the index number of the button selected.
+```
+### Prompt
+The prompt dialog has a variable-typed first parameter to either mimic native Prompt or add customization.
+
+Options Object:
+* title: title string
+* text: static text string message
+* defaultText: placeholder string in the input field
+* multiline: if true, adds a multiline input instead of single line
+* id: id number for retrieval from the cache
+* skippable: whether or not to add a "Do not ask again" checkbox
+* buttons: a string array that is converted to buttons on the bottom of the dialog. First is "dismiss" function and last is "confirm" by default.
+
+```
+ new ExtendScript_Dialogs($.global, true);
+ var answer = prompt("Favorite ice-cream flavor?","Margarine");
+
+ // for more complex choices...
+ var bio = prompt({text:"Write your life story here...", defaultText:"It was the best of times, it was the blurst of times.", multiline:true});
+```
+### Dropdown
+The dropdown dialog has a variable-typed first parameter as an array for quick use or as an options object to add customization.
+
+Options Object:
+* title: title string
+* text: static text string message
+* defaultText: placeholder string in the input field
+* multiline: if true, adds a multiline input instead of single line
+* id: id number for retrieval from the cache
+* skippable: whether or not to add a "Do not ask again" checkbox
+* buttons: a string array that is converted to buttons on the bottom of the dialog. First is "dismiss" function and last is "confirm" by default.
+
+```
+ new ExtendScript_Dialogs($.global, true);
+ var fish = Dialogs.dropdown(["Salmon","Tuna","Eel"]);
+
+ // for more complex choices...
+ var hero = Dialogs.dropdown({text:"Favorite Robotroid Character...", menuItems:["Black", "Red", "Blue", "Green", "Yellow"]});
+```
+
+## Cached values and skippable dialogs
+What if you are looping through a bunch of things and want to have a dialog pop up once with the option to not ask again? Or maybe just be able to retrieve a previous dialog selection?
+
+Gotcha covered. Behold the somewhat clunky dialog cache!
+### Cache set and clear
+* `Dialogs.getCached(id)` retrieves the saved properties from an id.
+If no argument is passed, it defaults to an id of -1.
+Cached data
+    * button: index number of which button was pressed to dismiss dialog
+    * skippable: Boolean, if true, dialog should be skipped
+    * value: the return value from the dialog (various types)
+* `Dialogs.clearCached(id)` sets the saved properties from an id to undefined.
+If no argument is passed, it defaults to an id of -1.
+
+
+```
+new ExtendScript_Dialogs($.global, true);
+for (i=0;i<5;i++)
+{
+    var cached = Dialogs.getCached();
+    if(cached && cached.skippable) {
+        break;
+    } else {
+        alert({text:"You have been warned...", skippable:true});
+    }
+}
+Dialogs.clearCached();
+
+for (i=0;i<5;i++)
+{
+    var answer;
+    var buttons = ["Naw","Meh","Yeah"];
+    var cached = Dialogs.getCached(55);
+    if(cached && cached.skippable) {
+        answer = Dialogs.getCached(55).value;
+        button = Dialogs.getCached(55).button;
+    } else {
+        answer = prompt({text:"Tedious input", id:55, skippable:true, buttons:buttons});
+        button = Dialogs.getCached(55).button;
+    }
+    // could also get buttons and values down here with cache
+    $.writeln(buttons[button]);
+    $.writeln(answer);
+}
+Dialogs.clearCached(55);
+```
+
+# Disclaimer
+This was hacked together and refactored a lot before it became an actual distributable thing so... it's not the prettiest.
+Emphasis was on making something really easy to use out of the box with extra bonus features. Not efficiency or elegance.
+
+Also, I'm not trying to solve every dialog problem in one API. If there's something more complex than single input, several buttons, it's probably best to just make a custom dialog.
+
+*/
+
+// Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
+;
+
+// shim in log
+try{ log.log; }
+catch(e){
+    log = {};
+    log.log = function(i){ $.writeln(i); };
+}
+
+// UMD for compatability with AMD and Node require, but still support a global constructor in the ExtendScript context
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+      define([], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    // Node. Does not work with strict CommonJS
+    module.exports = factory;
+  } else {
+    // (root is global... so should be $.global for ExtendScript)
+    root.ExtendScript_Dialogs = factory;
+  }
+}($.global, function (root, overrideNative) {// IIFE straight into the UMD, attaching to the $.global space
+
+    $.strict = true;
+    log.log("Making extendscript Dialogs...");
+
+    // Default to override global dialogs.
+    // root = (overrideNative == true)? root || $.global;
+
+    // Custom Dialog Overrides
+    var _UICache = {};
+    var Dialogs = {};
+
+    /**
+     * Add basic default static text message to existing dialog
+     * @param       {Object} w       Window object of the dialog
+     * @param       {Number} id      cache id of the dialog
+     * @param       {String} message Text for the message field
+     *
+     * @return      {Object}         Window object of the dialog
+     */
+    var _addMessage = Dialogs.addMessage = function (w,id,message)
+    {
+        if(message)
+        {
+            w.message = w.add('statictext', undefined, message, {multiline:true});
+            w.message.alignment = "fill";
+            w.message.maximumSize = [1000,1000];
+        }
+        return w;
+    }
+
+    /**
+     * Add basic default static text message to existing dialog
+     * @param       {Object}  w         Window object of the dialog
+     * @param       {Number}  id        cache id of the dialog
+     * @param       {Boolean} skippable Whether or not to make skippable
+     *
+     * @return      {Object}         Window object of the dialog
+     */
+    var _addSkippable = Dialogs.addSkippable = function (w,id,skippable)
+    {
+        if( skippable )
+        {
+            w.cbNoAskAgain = w.add('checkbox', undefined, 'Don\'t ask about this again.');
+            w.cbNoAskAgain.onClick = function(){ _UICache[id].skip = w.cbNoAskAgain.value };
+        }
+        return w;
+    }
+
+    /**
+     * Add basic default static text message to existing dialog
+     * @param       {Object}   w               Window object of the dialog
+     * @param       {Number}   id              cache id of the dialog
+     * @param       {Array}    buttons         Array of button name strings
+     * @param       {Function} onClickFunction Function override for onClick()
+     *
+     * @return      {Object}         Window object of the dialog
+     */
+    var _addButtons = Dialogs.addButtons = function (w,id,buttons, onClickFunction)
+    {
+        var onClickDefault = function onClickDefault ()
+        {
+            //$.writeln ("Clicked button " + this.index + " on dialog " + id);
+            // $.writeln ("Value = " +_UICache[args.id].value);
+            _UICache[id].value = Number(this.index);
+            _UICache[id].button = Number(this.index);
+            w.close( _UICache[id].value ) ;
+        };
+
+        // Add group and buttons at the bottom
+        w.buttonGroup = w.add('group');
+        w.buttonGroup.orientation = "row";
+
+        for( btn in buttons )
+        {
+            if( !buttons.hasOwnProperty (btn) ) continue;// sanity check for shims on for/in loops
+
+            var newButton = w.buttonGroup.add('button {alignment:"fill",justify:"center"}');
+            newButton.text = buttons[btn];
+            newButton.index = btn;
+
+            newButton.onClick = (typeof onClickFunction == "function")? onClickFunction:onClickDefault;
+        }
+
+        w.defaultElement = w.buttonGroup.children[(w.buttonGroup.children.length-1)];
+        w.cancelElement = w.buttonGroup.children[0];
+        return w;
+    }
+
+    /**
+     * Get cached UI options object, if anyway
+     * @param  {number} id ID number of the UI element
+     * @return {Object}    Cached UI options object or undefined
+     */
+    Dialogs.getCached = function (id) {
+        if(typeof id === "undefined"){id=-1};
+        return _UICache[id];
+    }
+
+    /**
+     * Get cached UI options object, if anyway
+     * @param  {number} id ID number of the UI element
+     * @return {Object}    Cached UI options object or undefined
+     */
+    Dialogs.clearCached = function (id){
+        if(typeof id === "undefined"){id=-1};
+        _UICache[id] = undefined;
+    }
+
+    /**
+     * Replaces standard alert with prettier and skippable ScriptUI version
+     * @param {String, Object} String of text or options object.
+     *                          args = {
+     *                             title:"Confirm",
+     *                             text:"Message",
+     *                             id:234,
+     *                             skippable:true,
+     *                          }
+     */
+    Dialogs.alert = function alertDialog(args)
+    {
+        // Set our defaults
+        // We want an object but might have been invoked with alert("String Message!")
+        if(typeof args == "string") { args = {text:args}; }
+
+        args.title = args.title||'Alert';
+        args.text = args.text || "Something Happened!";
+        args.id = (typeof args.id == "number")? args.id : -1;
+        args.skippable = args.skippable || false;
+        args.buttons = args.buttons || ["OK"];
+
+        return Dialogs.confirm(args);
+    }
+
+    /**
+     * Replaces standard confirm with prettier and skippable ScriptUI version
+      * @param {String, Object} String of text or options object.
+      *                          Button order assumes first is cancel, last is accept.
+      *                          args = {
+      *                             title:"Confirm",
+      *                             text:"Message",
+      *                             id:234,
+      *                             skippable:true,
+      *                             buttons:["Cancel","Select","Delete"]
+      *                          }
+      *
+      * @return {Number} boolean if 1st arg is string, index of the clicked button if 1st arg is options object
+      */
+    Dialogs.confirm = function confirmDialog(args)
+    {
+        // Set our defaults
+        // We want an object but might have been invoked with alert("String Message!")
+        if(typeof args == "string") { args = {text:args}; }
+
+        args.title = args.title||'Confirm';
+        args.text = args.text || "Do you agree?";
+        args.id = (typeof args.id == "number")? args.id : -1;
+        args.skippable = args.skippable || false;
+        args.buttons = args.buttons || ["Cancel","OK"];
+
+        // Initial cache or check if skipping
+        if( !_UICache.hasOwnProperty(args.id) || typeof _UICache[args.id] !== "object" )
+        {
+            _UICache[args.id] = {};
+        }
+        else if( args.skippable === true && _UICache[args.id].skip === true)
+        {
+            //$.writeln ("cached value = " + _UICache[args.id].value);
+            return _UICache[args.id].value;
+        }
+
+        var w = new Window ("dialog", args.title);
+        w.minimumSize = [155,50];
+
+        // Add basic static text message
+        _addMessage(w,args.id,args.text);
+
+        // Maybe add a checkbox to skip through future alerts of this type
+        _addSkippable(w,args.id,args.skippable);
+
+        // Add dismiss buttons
+        _addButtons(w,args.id,args.buttons);
+
+        // Jiggle the handle on layout cause long strings in statictext don't look right first time
+        w.onShow = function(){ w.layout.resize (true); }
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.center();
+        return w.show();
+    }
+
+    /**
+     * Replaces standard prompt with prettier and skippable ScriptUI version
+      * @param {String, Object} args String of text or options object.
+      *                          args = {
+      *                             title:"Prompt",
+      *                             text:"Message",
+      *                             defaultText:"Example...",
+      *                             multiline: true
+      *                             id:234,
+      *                             skippable:true,
+      *                             buttons:["Cancel","OK"]
+      *                          }
+      * @param {String} defaultText String to put as default in text field.
+      *
+      * @return {String} Input from text field
+      */
+    Dialogs.prompt = function promptDialog(args, defaultText)
+    {
+        function onClickDlgButton ()
+        {
+            //$.writeln ("Clicked button " + this.index + " on dialog " + id);
+            // $.writeln ("Value = " +_UICache[args.id].value);
+            _UICache[args.id].button = Number(this.index);
+            _UICache[args.id].value = this.window.prompt.text;
+            w.close( Number(this.index) ) ;
+        }
+
+        // Set our defaults
+        // We want an object but might have been invoked with prompt("String Message!","Default Placeholder")
+        if(typeof args == "string") { args = {text:args,defaultText:defaultText}; }
+
+        args.title = args.title||'Prompt';
+        args.text = args.text || "What is your answer?";
+        args.id = (typeof args.id == "number")? args.id : -1;
+        args.skippable = args.skippable || false;
+        args.buttons = args.buttons || ["Cancel","OK"];
+
+        args.defaultText = args.defaultText || "";
+        args.multiline = args.multiline || false;
+
+        // Initial cache or check if skipping
+        if( !_UICache.hasOwnProperty(args.id) || typeof _UICache[args.id] !== "object" )
+        {
+            _UICache[args.id] = {};
+        }
+        else if( args.skippable === true && _UICache[args.id].skip === true)
+        {
+            //$.writeln ("cached value = " + _UICache[args.id].value);
+            return _UICache[args.id].value;
+        }
+
+        var w = new Window ("dialog", args.title);
+
+        // Add basic static text message
+        _addMessage(w,args.id,args.text);
+
+        // Add input element
+        if(args.multiline)
+        {
+            w.prompt = w.add ("edittext",  [0,0,150,70], args.defaultText, {multiline:true, wantReturn: true});
+        } else {
+            w.prompt = w.add ("edittext", undefined, args.defaultText, {wantReturn: true});
+        }
+        w.prompt.alignment = "fill";
+        w.layout.layout();
+        w.prompt.active = true; // this line must follow w.layout.layout()
+
+        // Maybe add a checkbox to skip through future alerts of this type
+        _addSkippable(w,args.id,args.skippable);
+
+        // Add dismiss buttons
+        _addButtons(w,args.id,args.buttons, onClickDlgButton);
+
+        // Jiggle the handle on layout cause long strings in statictext don't look right first time
+        w.onShow = function(){ w.layout.resize (true); }
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.center();
+
+        if( w.show() !== 0 )
+        {
+            return _UICache[args.id].value;
+        }
+    }
+
+    /**
+     * Dialog with dropdown menu
+      * @param {Array, Object} args Array of strings or options object.
+      *                          options: {
+      *                          title:"Confirm",
+      *                          text:"Message",
+      *                          id:234,
+      *                          skippable:true,
+      *                          menuItems:["Salmon","Tuna","Eel"],
+      *                          buttons:["Cancel","OK"]
+      *                          }
+      *
+      * @return {String} Selected menu item
+      */
+    Dialogs.dropdown = function dropdownDialog(args)
+    {
+        function onClickDlgButton ()
+        {
+            //$.writeln ("Clicked button " + this.index);
+            //$.writeln ("Dialog ID = " + id);
+            // $.writeln ("Value = " +this.window.dropdown.selection.text);
+            _UICache[args.id].button = Number(this.index);
+            _UICache[args.id].value = this.window.dropdown.selection.text;
+            w.close( Number(this.index) ) ;
+        }
+
+        // Set our defaults
+        // We want an object but might have been invoked with dropdown(["Thing 1","Thing 2"])
+        if(Object.prototype.toString.call(args) === '[object Array]'){args = {menuItems:args};}
+
+        args.title = args.title||'Choose One';
+        args.text = args.text || "";
+        args.id = (typeof args.id == "number")? args.id : -1;
+        args.skippable = args.skippable || false;
+        args.buttons = args.buttons || ["Cancel","OK"];
+        args.menuItems = args.menuItems || ["Item1","Item2"];
+
+        // Initial cache or check if skipping
+        if( !_UICache.hasOwnProperty(args.id) || typeof _UICache[args.id] !== "object" )
+        {
+            _UICache[args.id] = {};
+        }
+        else if( args.skippable === true && _UICache[args.id].skip === true)
+        {
+            //$.writeln ("cached value = " + _UICache[args.id].value);
+            return _UICache[args.id].value;
+        }
+
+        var w = new Window ("dialog", args.title);
+        w.minimumSize = [155,50];
+
+        // Add basic static text message
+        _addMessage(w,args.id,args.text);
+
+        // add dropdown element
+        w.dropdown = w.add ("dropdownlist", undefined, args.menuItems);
+        w.dropdown.selection = 0;
+
+        // Maybe add a checkbox to skip through future alerts of this type
+        _addSkippable(w,args.id,args.skippable);
+
+        // Add dismiss buttons
+        _addButtons(w,args.id,args.buttons, onClickDlgButton);
+
+        // Jiggle the handle on layout cause long strings in statictext don't look right first time
+        w.onShow = function(){ w.layout.resize (true); }
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.center();
+
+        if( w.show()!== 0 )
+        {
+            return _UICache[args.id].value;
+        }
+    }
+
+    // mimic functionality from native JS dialogs...
+    function alertNative (arg) {
+        var args = (typeof arg == "object")? arg:{title:"Alert",id:-1,text:arg, buttons:["OK"]};
+        Dialogs.alert(arg);
+    }
+    function confirmNative (arg) {
+        if(typeof arg == "object") {
+            return Dialogs.confirm(arg);
+        } else {
+            return Boolean(Dialogs.confirm({title:"Confirm",id:-1,text:arg, buttons:["Cancel","OK"]}));
+        }
+    }
+    function promptNative(args, defaultText) {
+        args = (typeof args == "object")? args : {title:"Prompt",id:-1,text:args,defaultText:defaultText, buttons:["Cancel","OK"]};
+        return Dialogs.prompt(args);
+    }
+
+    // lick-n-stick to root
+    if(root) {
+        root.Dialogs = Dialogs;
+        if(root !== $.global)
+        {
+            try {
+                root.alert = alertNative;
+                root.confirm = confirmNative;
+                root.prompt = promptNative;
+            } catch(e) {
+                log.log("[ERROR] "+e.message);
+            }
+        }
+    }
+
+    // replace native js dialogs with ours
+    if(overrideNative === true) {
+        $.sleep(200);// sleep or sometimes native alert is read-only...
+        try {
+            $.global.alert = alertNative;
+            $.global.confirm = confirmNative;
+            $.global.prompt = promptNative;
+        } catch(e) {
+            log.log("[ERROR] "+e.message);
+        }
+    }
+
+    // return a reference
+    return Dialogs;
+
+}));

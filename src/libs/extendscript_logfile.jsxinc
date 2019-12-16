@@ -1,0 +1,181 @@
+/*
+MIT License
+
+Copyright (c) 2019 Max Johnon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
+/* An extenscript compatable log library with shims for basic Console calls
+*/
+
+// Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
+;
+
+// UMD for compatability with AMD and Node require, but still support a global constructor in the ExtendScript context
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+      define([], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    // Node. Does not work with strict CommonJS
+    module.exports = factory;
+  } else {
+    // (root is global... so should be $.global for ExtendScript)
+    root.ExtendScript_LogFile = factory;
+  }
+}($.global, function (root, logType) {// IIFE straight into the UMD, attaching to the $.global space
+
+    $.strict = true;
+    $.writeln("Making extendscript LogFile...");
+
+    var LogFile = { };
+
+//helper functions
+
+    // Make a folder and return a file handle.
+    function _createLogFile(typeString) {
+        var logFileDir = new Folder(_getDirString());
+        if (!logFileDir.exists) {
+            logFileDir.create();
+        }
+
+        var logFileName = _getISODate() + "-" + typeString + ".log";
+        var logFilePath = _getDirString() + logFileName;
+        return new File(logFilePath);
+    }
+
+    // Delete the log files that match the "type" name. Tidy up.
+    function _removeLogFiles( keepLatest ) {
+
+        var typeString = _getTypeString();
+        var removeTime = (LogFile.file instanceof File && LogFile.file.exists)? LogFile.file.created.getTime():new Date().getTime();
+
+        var logFileDir = new Folder(_getDirString());
+
+        if (logFileDir.exists) {
+            var logFiles = logFileDir.getFiles();
+            for (f = 0; f < logFiles.length; f++) {
+                var myFile = logFiles[f];
+                var fileTime = myFile.created.getTime();
+                var nameSearch = myFile.name.search(typeString + ".log");
+                if ( ( fileTime < removeTime || keepLatest == false ) && nameSearch > -1) {
+
+                    myFile.remove();
+                }
+            }
+        }
+    }
+
+    // Get log "type" or fallback
+    function _getTypeString() {
+        return LogFile.type||"default"; // account for un-saved or temp scripts
+    }
+
+    // Get script dir or fallback to desktop temp folder
+    function _getDirString() {
+        return (File($.fileName).exists) ? File($.fileName).path + "/logs/" : Folder.desktop + "/ExtendScript_Log_UnsavedScripts/"; // account for un-saved or temp scripts
+    }
+
+    // Overly complex ISO date string constructor
+    function _getISODate() {
+        var myDate = new Date();
+        // forward compatability with ES5 Shims
+        if (typeof myDate.getFullYear !== "function") {
+            myDate.getFullYear = function() {
+                return (myDate.getYear + 1900); // offset from year 1900
+            }
+        }
+
+        var myYear = myDate.getFullYear().toString();
+        var myMonth = _zeroPad(myDate.getMonth() + 1, 2); // counts from 0
+        var myDay = _zeroPad(myDate.getDate(), 2);
+        var myHours = _zeroPad(myDate.getHours(), 2);
+        var myMinutes = _zeroPad(myDate.getMinutes(), 2);
+        var mySeconds = _zeroPad(myDate.getSeconds(), 2);
+
+        return myYear + "-" + myMonth + "-" + myDay + "_" + myHours + myMinutes + mySeconds;
+    }
+
+    // Pad those number strings kid. Pad em good.
+    function _zeroPad(num, numZeros) {
+        var absNum = Math.abs(num);
+        var zeros = Math.max(0, numZeros - Math.floor(absNum).toString().length);
+        var zeroString = Math.pow(10, zeros).toString().substr(1);
+        if (num < 0) {
+            zeroString = '-' + zeroString;
+        }
+
+        return zeroString + absNum;
+    }
+
+// Public Functions
+
+    //initialization
+    LogFile.init = function (logType) {
+        LogFile.type = logType;
+        LogFile.directory = _getDirString();
+        LogFile.file = _createLogFile(_getTypeString());
+
+        return LogFile;
+    }
+
+    //primary method
+    LogFile.writeln = LogFile.log = function (logMessage) {
+        LogFile.file.open("a+");
+        LogFile.file.writeln(new Date() + ": " + logMessage);
+        LogFile.file.close();
+
+        return LogFile;
+    }
+
+    //cleanup
+    LogFile.clear = LogFile.log = function (logMessage) {
+        LogFile.file.open("w");
+        LogFile.file.close();
+
+        return LogFile;
+    }
+
+    //remove this file
+    LogFile.remove = function() {
+        if(File(LogFile.file).exists) {
+            LogFile.file.remove();
+        }
+
+        return LogFile;
+    },
+
+    // remove all similar files but this one
+    LogFile.removeOld = function () {
+        _removeLogFiles();
+        return LogFile;
+    },
+
+    // remove all similar files
+    LogFile.removeAll = function () {
+        _removeLogFiles(false);
+        return LogFile;
+    }
+
+    // Spit it out already
+    return LogFile.init(logType);
+
+}));

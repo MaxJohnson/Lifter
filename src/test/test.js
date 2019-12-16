@@ -30,7 +30,7 @@
     {
         var results = (_funcNameRegex).exec(obj.constructor.toString());
         return (results && results.length > 1) ? results[1] : "";
-    };
+    }
 
     /** @private Formats a string. */
     function _formatString()
@@ -38,11 +38,11 @@
         var args = Array.prototype.slice.call(arguments);
         var formatted = args.shift().toString();
 
-        for (arg in args)
+        for (var arg in args)
             formatted = formatted.replace("{" + arg + "}", args[arg]);
 
         return formatted;
-    };
+    }
 
     /** 
      * @private
@@ -165,7 +165,7 @@
         }
 
         return true;
-    };
+    }
 
     /** 
      * @private
@@ -187,7 +187,7 @@
         }
 
         return result;
-    };
+    }
 
     /** @private Assert functions. */
     var _assert = function ()
@@ -370,7 +370,7 @@
                     }
                     else if (typeof expected === 'function')
                     {
-                        this.ok(expected.call({}, actual), message)
+                        this.ok(expected.call({}, actual), message);
                     }
                     else
                     {
@@ -440,7 +440,7 @@
                     return !_deepCompare(actual, expected);
                 }, message);
             },
-        }
+        };
     };
 
     /**
@@ -566,7 +566,7 @@
 
         times = Math.abs(Math.ceil(times));
         var i = 0,
-            context = arguments.length >= 3 ? arguments[2] : void 0;;
+            context = arguments.length >= 3 ? arguments[2] : void 0;
 
         try
         {

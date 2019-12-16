@@ -15,6 +15,7 @@
  */
 ; (function ()
 {
+    log.log("LOADING Lifter.documents ...");
     var documents = {};
 
     /** List of all available color modes (aka color spaces), indexes match the ones of the DocumentMode enumeration. @private */
@@ -38,7 +39,7 @@
 
         // Execute code
         callback.call(context);
-    };
+    }
 
     /** Puts the correct value in 'ref' to the get the document specified by DocumentId. @private */
     function _getDocumentIdRef(documentId, ref)
@@ -56,7 +57,7 @@
             // Use DocumentId directly
             ref.putIdentifier(c2id('Dcmn'), documentId);
         }
-    };
+    }
 
 
     /**
@@ -162,14 +163,14 @@
 
                         switch (value)
                         {
-                            case DocumentMode.GRAYSCALE: mode = _documentColorModes[1];
-                            case DocumentMode.RGB: mode = _documentColorModes[2];
-                            case DocumentMode.CMYK: mode = _documentColorModes[3];
-                            case DocumentMode.LAB: mode = _documentColorModes[4];
-                            case DocumentMode.BITMAP: mode = _documentColorModes[5];
-                            case DocumentMode.INDEXEDCOLOR: mode = _documentColorModes[6];
-                            case DocumentMode.MULTICHANNEL: mode = _documentColorModes[7];
-                            case DocumentMode.DUOTONE: mode = _documentColorModes[8];
+                            case DocumentMode.GRAYSCALE: mode = _documentColorModes[1];break;
+                            case DocumentMode.RGB: mode = _documentColorModes[2];break;
+                            case DocumentMode.CMYK: mode = _documentColorModes[3];break;
+                            case DocumentMode.LAB: mode = _documentColorModes[4];break;
+                            case DocumentMode.BITMAP: mode = _documentColorModes[5];break;
+                            case DocumentMode.INDEXEDCOLOR: mode = _documentColorModes[6];break;
+                            case DocumentMode.MULTICHANNEL: mode = _documentColorModes[7];break;
+                            case DocumentMode.DUOTONE: mode = _documentColorModes[8];break;
                             default: throw new Error('Invalid color mode: ' + value + '.');
                         }
 
@@ -257,7 +258,7 @@
         },
     };
 
-    /** 
+    /**
      * Gets the number of documents that are currently open.
      * @return {Number} Number of currently open documents.
      */
@@ -286,7 +287,7 @@
         return executeActionGet(ref).getInteger(c2id('DocI'));
     };
 
-    /** 
+    /**
      * Creates a new document.
      * @param {Number, UnitValue} width Document width.
      * @param {Number, UnitValue} height Document height.
@@ -378,7 +379,7 @@
         return documents;
     };
 
-    /** 
+    /**
      * Opens the specified document.
      * @param {File,String} file Either a File object or a path as string indicating the file to open.
      * @return Chained reference to document utilities.
@@ -391,7 +392,7 @@
         return documents;
     };
 
-    /** 
+    /**
      * Saves the currently active document.
      * @param {String,File} [saveIn]        If specified, document will be saved at this location. It can either be a File
      *                                      object or a path string.
@@ -615,7 +616,7 @@
 
         var desc = new ActionDescriptor();
 
-        if (width === height)
+        if (width/originalWidth === height/originalHeight)
         {
             // Constrain proportions
             desc.putUnitDouble(c2id("Wdth"), c2id("#Pxl"), width.as('px'));
@@ -768,4 +769,5 @@
      *               guaranteed to be the leftmost one in UI.
      */
     Lifter.documents = documents;
+    log.log("Lifter.documents done.");
 }());

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
-; (function ()
+;
+if(typeof Lifter !== "object") {// sanity check for previous definition
+(function ()
 {
 $.strict = true;
+var _DEVBUILD = false;
+$.writeln("Starting Lifter...");

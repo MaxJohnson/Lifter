@@ -4787,7 +4787,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 };
 
 /**
- * Copyright 2014 Francesco Camarlinghi
+ * Copyright 2018 Max Johnson
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -4801,763 +4801,540 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 ; (function ()
 {
-    log.log("LOADING Lifter.documents ...");
-    var documents = {};
+    log.log("LOADING Lifter.system ...");
+    var system = {};
+    //var log = Lifter.log;
 
-    /** List of all available color modes (aka color spaces), indexes match the ones of the DocumentMode enumeration. @private */
-    var _documentColorModes = [
-        -1, // Empty element as DocumentMode enumeration starts at index 1
-        c2id('Grsc'), // Grayscale
-        c2id('RGBC'), // RGB
-        c2id('CMYC'), // CMYK
-        c2id('LbCl'), // LAB
-        c2id('Btmp'), // Bitmap
-        c2id('Indl'), // Indexed Color
-        c2id('Mlth'), // Multichannel
-        c2id('Dtn '), // Duotone
-    ];
-
-    /** Sets the passed document as active and executes the specified callback. @private */
-    function _wrapSwitchActive(documentId, callback, context)
+    /**
+     * is the OS windows?
+     * @returns {boolean}
+     */
+    system.isWindows = function isWindows ()
     {
-        // Set active layer to documentId
-        documents.list.makeActive(documentId);
+        return $.os.match( /windows/i );
+    };
 
-        // Execute code
-        callback.call(context);
-    }
-
-    /** Puts the correct value in 'ref' to the get the document specified by DocumentId. @private */
-    function _getDocumentIdRef(documentId, ref)
+    /**
+     * is the OS mac?
+     * @returns {boolean}
+     */
+    system.isMac = function isMac ()
     {
-        if (typeof documentId !== 'number')
-        {
-            // If DocumentId is not passed, assume current document
-            if (documents.count() === 0)
-                throw new Error('Could not target current document: no documents are currently open.');
+        return !system.isWindows();
+    };
 
-            ref.putEnumerated(c2id('Dcmn'), c2id('Ordn'), c2id('Trgt'));
+    system.files = {};
+
+    /**
+     * Verifies file exists and returns File object
+     * @param {File, String} File object or file path.
+     * @return {File} File object.
+     */
+    system.files.getFile = _ensureFile;
+
+    /**
+     * Returns true if path or object is a Folder
+     * @method isDirectory
+     * @param {File, Folder, String} File, Folder object or file path to test
+     * @return {Boolean} True if directory Folder
+     */
+    system.files.isDirectory = system.files.isFolder = function isDirectory( myDir ) {
+        return (File(myDir) instanceof Folder);
+    };
+
+    /**
+     * Open and select (or not) the file or path in the OS file browser
+     * @method browseTo
+     * @param  {File,Folder,String} theFile File, Folder, or path string to open
+     */
+    system.files.browseTo = function browseTo( theFile ) {
+        var cmd;
+        var isDir = system.files.isDirectory(theFile);
+        if(system.isMac()) {
+            cmd = (isDir)?'open ':'open -R ';
+        } else {
+            cmd = (isDir)?'explorer.exe /n, ':'explorer.exe /select, ';
         }
-        else
+        cmd += '\"' + new File(theFile).fsName + '\"';
+        log.info("Browse to command: " + cmd);
+        app.system(cmd);
+    };
+
+    /**
+     * Eval one or more files
+     * @param  {File or Folder } inFile File or Folder object to eval
+     * @return {File or folder}        Same object ref that was passed in
+     */
+    system.files.eval = function (inFile)
+    {
+        inFile = _ensureFile(inFile);
+        var jsxFiles = [inFile];
+
+        if (File(inFile) instanceof Folder)//Wrapping in File() returns correct instance type
         {
-            // Use DocumentId directly
-            ref.putIdentifier(c2id('Dcmn'), documentId);
+            jsxFiles = Folder(inFile).getFiles( "*.jsx" );
         }
-    }
+        jsxFiles.forEach(_evalFile);
+
+        return inFile;
+    };
 
 
     /**
-     * Supported document properties. This is public so that additional properties can be added at runtime.
+     * File type mask to apply to path
+     * @param  {String} fileName  path or file name to check
+     * @param  {Array or String} masks file type masks (i.e. ["*.psd","*.tif"])
+     * @return {Boolean}       True if path passes mask check
      */
-    documents.supportedProperties = {
-        'itemIndex': { typeId: c2id('ItmI'), type: DescValueType.INTEGERTYPE, set: false, },
+    system.files.maskTest = function (fileName, masks, isExclude)
+    {
+        // escape early if no masks
+        if( !masks || !masks.length ) return true;
 
-        'documentId': { typeId: c2id('DocI'), type: DescValueType.INTEGERTYPE, set: false, },
+        var reMask;
+        var result = (!isExclude)?false:true;// flip defaults for excludes
 
-        'width': {
-            typeId: c2id('Wdth'),
-            type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(64, 'px'),
-            get: function (prop, documentId, desc)
+        // if string, wrap in array
+        if(typeof masks === "string"){ masks = [masks];}
+
+        for(var m=0; m<masks.length; m++)
+        {
+            reMask = masks[m];
+
+            // convert text filters like "*.txt" to regex
+            if(typeof reMask == "string")
             {
-                return new UnitValue(desc.getUnitDoubleValue(prop.typeId), 'px');
-            },
-            set: false,
-        },
+                reMask = reMask.replace(/\./g,"\\.").replace(/\*/g,".*");
+                reMask =  new RegExp(reMask+"$");
+            }
 
-        'height': {
-            typeId: c2id('Hght'),
-            type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(64, 'px'),
-            get: function (prop, documentId, desc)
+            if(typeof reMask == "function" && fileName.search(reMask) !== -1)
             {
-                return new UnitValue(desc.getUnitDoubleValue(prop.typeId), 'px');
-            },
-            set: false,
-        },
+                result = (!isExclude)?true:false;
+                break;
+            }
+        }
+        return result;
+    };
 
-        'resolution': {
-            typeId: c2id('Rslt'),
-            type: DescValueType.UNITDOUBLE,
-            defaultValue: 72,
-            get: function (prop, documentId, desc)
-            {
-                return desc.getUnitDoubleValue(prop.typeId);
-            },
-            set: false,
-        },
+    /**
+     * Exclude file type mask to apply to path. Opposite of maskTest()
+     * @param  {String} fileName  path or file name to check
+     * @param  {Array or String} masks file type masks (i.e. ["*.psd","*.tif"])
+     * @return {Boolean}       True if path passes mask check
+     */
+    system.files.excludeTest = function (fileName, masks)
+    {
+        return system.files.maskTest(fileName, masks, true);
+    };
 
-        'name': { typeId: c2id('Ttl '), type: DescValueType.STRINGTYPE, defaultValue: 'Untitled', set: false, },
+    /**
+     * Make directory with error checking
+     * @param  {Folder/String} folder folder or path to create
+     * @return {Boolean}       success result like folder.create()
+     */
+    system.files.makeDir = function makeDir( inFolder ) {
+        inFolder = new Folder(inFolder);
 
-        'bitsPerChannel': {
-            typeId: c2id('Dpth'),
-            type: DescValueType.INTEGERTYPE,
-            defaultValue: BitsPerChannelType.EIGHT,
-            get: function (prop, documentId, desc)
-            {
-                var bitsPerChannel = desc.getInteger(prop.typeId);
-
-                switch (bitsPerChannel)
+        // create folder if missing
+        if (!inFolder.exists) {
+            log.log("Creating new folder: " + inFolder.fsName);
+            try {
+                if( inFolder.create() === false )
                 {
-                    case 1: return BitsPerChannelType.ONE;
-                    case 8: return BitsPerChannelType.EIGHT;
-                    case 16: return BitsPerChannelType.SIXTEEN;
-                    case 32: return BitsPerChannelType.THIRTYTWO;
-                    default: throw new Error('Invalid bit depth: ' + bitsPerChannel + '.');
+                    log.error( "copyFiles: error creating directory "+inFolder.fsName);
+                    return 0;
                 }
-            },
-        },
-
-        'mode': {
-            typeId: c2id('Md  '),
-            type: DescValueType.ENUMERATEDTYPE,
-            defaultValue: DocumentMode.RGB,
-            get: function (prop, documentId, desc)
-            {
-                var mode = desc.getEnumerationValue(prop.typeId);
-
-                switch (mode)
-                {
-                    case _documentColorModes[1]: return DocumentMode.GRAYSCALE;
-                    case _documentColorModes[2]: return DocumentMode.RGB;
-                    case _documentColorModes[3]: return DocumentMode.CMYK;
-                    case _documentColorModes[4]: return DocumentMode.LAB;
-                    case _documentColorModes[5]: return DocumentMode.BITMAP;
-                    case _documentColorModes[6]: return DocumentMode.INDEXEDCOLOR;
-                    case _documentColorModes[7]: return DocumentMode.MULTICHANNEL;
-                    case _documentColorModes[8]: return DocumentMode.DUOTONE;
-                    default: throw new Error('Invalid color mode: ' + typeIDToCharID(mode) + '.');
-                }
-            },
-            set: function (prop, documentId, value)
-            {
-                _wrapSwitchActive(documentId, function ()
-                {
-                    var desc = new ActionDescriptor();
-
-                    if (value === DocumentMode.BITMAP)
-                    {
-                        var desc2 = new ActionDescriptor();
-                        desc2.putUnitDouble(c2id('Rslt'), c2id('#Rsl'), documents.prop('resolution'));
-                        desc2.putEnumerated(c2id('Mthd'), c2id('Mthd'), c2id('DfnD'));
-                        desc.putObject(c2id('T   '), c2id('BtmM'), desc2);
-                        executeAction(c2id('CnvM'), desc, _dialogModesNo);
-                    }
-                    else
-                    {
-                        var mode;
-
-                        switch (value)
-                        {
-                            case DocumentMode.GRAYSCALE: mode = _documentColorModes[1];break;
-                            case DocumentMode.RGB: mode = _documentColorModes[2];break;
-                            case DocumentMode.CMYK: mode = _documentColorModes[3];break;
-                            case DocumentMode.LAB: mode = _documentColorModes[4];break;
-                            case DocumentMode.BITMAP: mode = _documentColorModes[5];break;
-                            case DocumentMode.INDEXEDCOLOR: mode = _documentColorModes[6];break;
-                            case DocumentMode.MULTICHANNEL: mode = _documentColorModes[7];break;
-                            case DocumentMode.DUOTONE: mode = _documentColorModes[8];break;
-                            default: throw new Error('Invalid color mode: ' + value + '.');
-                        }
-
-                        desc.putClass(c2id('T   '), mode);
-                        executeAction(c2id('CnvM'), desc, _dialogModesNo);
-                    }
-                });
-            },
-        },
-
-        'colorProfileName': {
-            typeId: s2id('profile'),
-            type: DescValueType.STRINGTYPE,
-            defaultValue: 'sRGB IEC61966-2.1',
-            set: function (prop, documentId, value)
-            {
-                _wrapSwitchActive(documentId, function ()
-                {
-                    var ref = new ActionReference();
-                    _getDocumentIdRef(documentId, ref);
-                    var desc = new ActionDescriptor();
-                    desc.putReference(c2id('null'), ref);
-                    desc.putString(s2id('profile'), value);
-                    executeAction(s2id('assignProfile'), desc, _dialogModesNo);
-                });
-            },
-        },
-
-        'format': {
-            typeId: c2id('Fmt '),
-            type: DescValueType.STRINGTYPE,
-            defaultValue: 'Photoshop',
-            get: function (prop, documentId, desc)
-            {
-                if (!desc.hasKey(prop.typeId))
-                    throw new Error('Unable to get "format". The document needs to be saved before accessing this property.');
-
-                return new File(desc.getPath(prop.typeId));
-            },
-            set: false,
-        },
-
-        'isDirty': { typeId: c2id('IsDr'), type: DescValueType.BOOLEANTYPE, defaultValue: false, set: false, },
-
-        'pixelAspectRatio': { typeId: s2id('pixelScaleFactor'), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
-
-        'zoom': { typeId: c2id('Zm  '), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
-
-        'xmpMetadata': {
-            typeId: s2id('XMPMetadataAsUTF8'),
-            type: DescValueType.STRINGTYPE,
-            defaultValue: '',
-            get: function (prop, documentId, desc)
-            {
-                // Get the data as XMPMeta object if XMP libraries are loaded
-                // or as a simple UTF8 string otherwise
-                var data = desc.getString(prop.typeId);
-                return (typeof XMPMeta === 'function') ? new XMPMeta(data) : data;
-            },
-            set: function (prop, documentId, value)
-            {
-                // Serialize data if it's inside an XMPMeta object
-                if (typeof value.serialize === 'function')
-                    value = value.serialize();
-
-                _wrapSwitchActive(documentId, function ()
-                {
-                    app.activeDocument.xmpMetadata.rawData = value;
-                });
-            },
-        },
-
-        'fullName': {
-            typeId: c2id('FilR'),
-            type: DescValueType.ALIASTYPE,
-            defaultValue: null,
-            get: function (prop, documentId, desc)
-            {
-                if (!desc.hasKey(prop.typeId))
-                    return null;
-                else
-                    return new File(desc.getPath(prop.typeId));
-            },
-            set: false,
-        },
-    };
-
-    /**
-     * Gets the number of documents that are currently open.
-     * @return {Number} Number of currently open documents.
-     */
-    documents.count = function ()
-    {
-        var ref = new ActionReference();
-        ref.putProperty(c2id('Prpr'), c2id('NmbD'));
-        ref.putEnumerated(c2id('capp'), c2id('Ordn'), c2id('Trgt'));
-        return executeActionGet(ref).getInteger(c2id('NmbD'));
-    };
-
-    /**
-     * Gets the identifier of the document identified by the passed ItemIndex.
-     * @param {Number} itemIndex Document ItemIndex.
-     * @return {Number} Document identifier.
-     */
-    documents.getDocumentIdByItemIndex = function (itemIndex)
-    {
-        if (typeof itemIndex !== 'number' || itemIndex < 1)
-            throw new Error(['Invalid itemIndex: "', itemIndex, '".'].join(''));
-
-        var ref = new ActionReference();
-        ref.putProperty(c2id('Prpr'), c2id('DocI'));
-        ref.putIndex(c2id('Dcmn'), itemIndex);
-
-        return executeActionGet(ref).getInteger(c2id('DocI'));
-    };
-
-    /**
-     * Creates a new document.
-     * @param {Number, UnitValue} width Document width.
-     * @param {Number, UnitValue} height Document height.
-     * @param {Number} [resolution=72] Document resolution.
-     * @param {String} [name] Document name.
-     * @param {NewDocumentMode} [mode=NewDocumentMode.RGB] Document color mode.
-     * @param {DocumentFill, SolidColor} [initialFill=DocumentFill.WHITE] Document initial fill or a valid solid color.
-     * @param {Number} [pixelAspectRatio=1.0] Document aspect ratio.
-     * @param {BitsPerChannelType} [bitsPerChannel=BitsPerChannelType.EIGHT] Document channel depth.
-     * @param {String} [colorProfileName] Document color profile.
-     * @return Chained reference to document utilities.
-     */
-    documents.add = function (width, height, resolution, name, mode, initialFill, pixelAspectRatio, bitsPerChannel, colorProfileName)
-    {
-        // Parse parameters
-        var desc = new ActionDescriptor();
-
-        // Mode
-        switch (mode)
-        {
-            case NewDocumentMode.GRAYSCALE: desc.putClass(c2id('Md  '), c2id('Grys')); break;
-            case NewDocumentMode.CMYK: desc.putClass(c2id('Md  '), c2id('CMYM')); break;
-            case NewDocumentMode.LAB: desc.putClass(c2id('Md  '), c2id('LbCM')); break;
-            case NewDocumentMode.BITMAP: desc.putClass(c2id('Md  '), c2id('BtmM')); break;
-            default: desc.putClass(c2id('Md  '), c2id('RGBM')); break; // Default to NewDocumentMode.RGB
-        }
-
-        // Name
-        if (typeof name === 'string' && name.length)
-            desc.putString(c2id('Nm  '), name);
-
-        // Width
-        if ((typeof width !== 'number' || width < 0) && !(width instanceof UnitValue))
-            throw new Error('Invalid width: ' + width);
-        desc.putUnitDouble(c2id('Wdth'), c2id('#Pxl'), (width instanceof UnitValue) ? width.as('px') : width);
-
-        // Height
-        if ((typeof height !== 'number' || height < 0) && !(height instanceof UnitValue))
-            throw new Error('Invalid height: ' + height);
-        desc.putUnitDouble(c2id('Hght'), c2id('#Pxl'), (height instanceof UnitValue) ? height.as('px') : height);
-
-        // Resolution
-        desc.putUnitDouble(c2id('Rslt'), c2id('#Rsl'), (typeof resolution === 'number' && resolution > 0) ? resolution : 72);
-
-        // Pixel aspect ratio
-        desc.putDouble(s2id('pixelScaleFactor'), (typeof pixelAspectRatio === 'number' && pixelAspectRatio > 0) ? pixelAspectRatio : 1);
-
-        // Initial fill
-        initialFill || (initialFill = DocumentFill.WHITE);
-
-        if (initialFill instanceof SolidColor)
-        {
-            // SolidColor
-            desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Clr '));
-            var desc3 = new ActionDescriptor();
-            desc3.putUnitDouble(c2id('H   '), c2id('#Ang'), initialFill.hsb.hue);
-            desc3.putDouble(c2id('Strt'), initialFill.hsb.saturation);
-            desc3.putDouble(c2id('Brgh'), initialFill.hsb.brightness);
-            desc.putObject(c2id('FlCl'), c2id('HSBC'), desc3);
-        }
-        else
-        {
-            // DocumentFill
-            switch (initialFill)
-            {
-                case DocumentFill.TRANSPARENT: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Trns')); break;
-                case DocumentFill.BACKGROUNDCOLOR: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('BckC')); break;
-                default: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Wht ')); break; // Default to DocumentFill.WHITE
+            } catch (e) {
+                log.error(e.message);
+                return 0;
             }
-        }
-
-        // Color depth
-        switch (bitsPerChannel)
+        } else if ( inFolder.readonly )
         {
-            case BitsPerChannelType.ONE: desc.putInteger(c2id('Dpth'), 1); break;
-            case BitsPerChannelType.SIXTEEN: desc.putInteger(c2id('Dpth'), 16); break;
-            case BitsPerChannelType.THIRTYTWO: desc.putInteger(c2id('Dpth'), 32); break;
-            default: desc.putInteger(c2id('Dpth'), 8); break; // Default to BitsPerChannelType.EIGHT
+            log.error( "copyFiles: directory is read only "+inFolder.fsName);
+            return 0;
+            // make writeable
+            //inFolder.readonly = false;
         }
-
-        // Color profile
-        if (typeof colorProfileName === 'string' && colorProfileName.length)
-            desc.putString(s2id('profile'), colorProfileName);
-
-        // Create new document
-        var desc2 = new ActionDescriptor();
-        desc2.putObject(c2id('Nw  '), c2id('Dcmn'), desc);
-        executeAction(c2id('Mk  '), desc2, _dialogModesNo);
-        return documents;
+        return 1;
     };
 
     /**
-     * Opens the specified document.
-     * @param {File,String} file Either a File object or a path as string indicating the file to open.
-     * @return Chained reference to document utilities.
+     * Recursively remove directory folder
+     * @param  {Folder/String} folder folder or path to remove
+     * @return {Boolean}       success result like folder.create()
      */
-    documents.open = function (file)
-    {
-        var desc = new ActionDescriptor();
-        desc.putPath(c2id('null'), _ensureFile(file));
-        executeAction(c2id('Opn '), desc, _dialogModesNo);
-        return documents;
-    };
+    system.files.removeDir = function removeDir( srcFolder ) {
+        srcFolder = new Folder(srcFolder);
 
-    /**
-     * Saves the currently active document.
-     * @param {String,File} [saveIn]        If specified, document will be saved at this location. It can either be a File
-     *                                      object or a path string.
-     * @param {Any} [options]               Save format options, defaults to Photoshop format if not specified.
-     * @param {Boolean} [asCopy]            Saves the document as a copy, leaving the original open.
-     * @param {Extension} [extensionType]   Appends the specified extension to the file name.
-     * @param {Boolean} [overwrite]         If 'saveIn' is specified and different from current file location, this parameter
-     *                                      indicates whether any existing files at the specified location should be overwritten.
-     *                                      If false an Error is raised if a file already exists at the specified
-     *                                      path.
-     * @return Chained reference to document utilities.
-     */
-    documents.save = function (saveIn, options, asCopy, extensionType, overwrite)
-    {
-        if (documents.count() > 0)
+        // create folder if missing
+        if (srcFolder.exists)
         {
-            if (arguments.length === 0)
-            {
-                app.activeDocument.save();
-            }
-            else
-            {
-                saveIn = _ensureFile(saveIn);
+            // get file list from folder
+            srcFiles = srcFolder.getFiles( );
 
-                if (overwrite === false, saveIn.exists && documents.prop('fileReference') !== saveIn)
-                    throw new Error(['Another file already exists at the specified location: "', saveIn, '".'].join(''));
+            log.log( "\n---  system.files.removeDir  ---" );
+            log.log( 'Folder: ' + srcFolder );
+            log.log( 'Items: ' + srcFiles.length );
+            srcFiles.forEach(function(srcFile){
+                log.log(' - '+srcFile.name);
+            });
 
-                app.activeDocument.saveAs(_ensureFile(saveIn), options, asCopy, extensionType);
-            }
-        }
 
-        return documents;
-    };
+            srcFiles.forEach(function(srcFile){
 
-    /**
-     * Closes the currently active document.
-     * @param {Boolean} [save=false] Specifies whether changes should be saved before closing.
-     * @return Chained reference to document utilities.
-     */
-    documents.close = function (save)
-    {
-        if (documents.count() > 0)
-            app.activeDocument.close(!!save ? SaveOptions.SAVECHANGES : SaveOptions.DONOTSAVECHANGES);
+                //if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
+                //srcFile = srcFiles[f];
+                // srcFile.readonly = false;
 
-        return documents;
-    };
-
-    /**
-     * Iterates over the currently open documents, executing the specified callback on each element.
-     * Please note: Adding or removing documents while iterating is not supported.
-     * @param {Function} callback       Callback function. It is bound to context and invoked with two arguments (itemIndex, documentId).
-     *                                  If callback returns true, iteration is stopped.
-     * @param {Object} [context=null]   Callback function context.
-     * @param {Boolean} [reverse=false] Whether to iterate from the end of the documents collection.
-     * @return Chained reference to document utilities.
-     */
-    documents.forEach = function (callback, context, reverse) // callback[, context[, reverse]]
-    {
-        if (typeof callback !== 'function')
-            throw new Error('Callback must be a valid function.');
-
-        var n, i;
-
-        if (reverse)
-        {
-            i = documents.count() + 1;
-            n = 0;
-
-            while (--i > n)
-            {
-                if (callback.call(context, i, documents.getDocumentIdByItemIndex(i)))
-                    break;
-            }
-        }
-        else
-        {
-            n = documents.count() + 1;
-            i = 0;
-
-            while (++i < n)
-            {
-                if (callback.call(context, i, documents.getDocumentIdByItemIndex(i)))
-                    break;
-            }
-        }
-
-        return documents;
-    };
-
-    /**
-     * Gets or sets the property with the given name on the specified document. If invoked with no arguments
-     * gets a wrapped ActionDescriptor containing all the properties of the specified document.
-     * @param {Number} [documentId] Document identifier, defaults to currently active document if null or not specified.
-     * @param {String} [name] Property name.
-     * @param {Any} [value]Property value.
-     * @return {Any, ActionDescriptor, Object}  Property value when getting a property, a wrapped ActionDescriptor when invoked with no arguments
-     *                                          or a chained reference to document utilities when setting a property.
-     */
-    documents.prop = function () // [documentId[, name[, value]]
-    {
-        // Parse args
-        var documentId, name, value, ref, desc;
-
-        if (typeof arguments[0] === 'number'
-            || (!arguments[0] && arguments.length > 1))
-        {
-            // Use specified documentId
-            documentId = arguments[0];
-            name = arguments[1];
-            value = arguments[2];
-        }
-        else
-        {
-            // Use current document
-            name = arguments[0];
-            value = arguments[1];
-        }
-
-        if (typeof name === 'undefined')
-        {
-            // Get wrapped action descriptor
-            ref = new ActionReference();
-            _getDocumentIdRef(documentId, ref);
-            desc = executeActionGet(ref);
-            return _getWrappedActionDescriptor(desc, documents.supportedProperties, documentId || desc.getInteger(c2id('DocI')));
-        }
-        else
-        {
-            // Find required property
-            if (!documents.supportedProperties.hasOwnProperty(name))
-                throw new Error(['Invalid document property: "', name, '".'].join(''));
-
-            var prop = documents.supportedProperties[name];
-
-            if (typeof value === 'undefined')
-            {
-                // Get
-                // Get ActionDescriptor for specified document
-                ref = new ActionReference();
-
-                if (prop.typeId)
-                    ref.putProperty(c2id('Prpr'), prop.typeId);
-
-                _getDocumentIdRef(documentId, ref);
-                desc = executeActionGet(ref);
-
-                if (prop.get)
+                if (srcFile instanceof File)
                 {
-                    // Use custom getter for this property
-                    return prop.get.call(null, prop, documentId, desc);
+                    remResult = srcFile.remove();// user deleted
+        		}
+                else if (srcFile instanceof Folder)
+                {
+                    system.files.removeDir(srcFile);
                 }
                 else
                 {
-                    // Call generic getter
-                    return _getDescriptorProperty(desc, prop.typeId, prop.type);
+                    log.log ("Don't know if I can remove this?\n"+srcFile);
                 }
-            }
-            else
+            });
+
+            // close the door on your way out...
+            return srcFolder.remove();// user deleted
+        }
+        return 1;
+    };
+
+    /**
+     * Recurseively copy a file or folder path with options and dialogs
+     * @param  {File/Folder/String} src     Source file (can be a string)
+     * @param  {File/Folder/String} dst     Destination path (can be a string)
+     * @param  {Object} options     Options to override defaults...
+     *                                  {
+     *                                     overwrite: true,// overwrite existing files
+     *                                     silent: false,// no dialogs
+     *                                     unlock:true,// unlock read-only files after copy
+     *                                     masks:[],//file masks (i.e. ["*.psd","*.tif"])
+     *                                     excludes:[],//files to exclude (i.e. ["*.config","node_modules"])
+     *                                     replacements:[]// list of pairs to replace in file name. ex. [["tmp","TheThing"],[" ","_"]]
+     *                                  }
+     * @return {Array}         Resulting list of File objects that were copied.
+     */
+    system.files.copy = function copyFiles( src, dst, options ) {
+        // mutable vars accept file path or File/Folder handle...
+        var srcFile = new File(src);
+        var dstFile = new File(dst);
+
+        // if folder, pass to copyDir like a snake eating its tail
+        if (File(srcFile) instanceof Folder)
+        {
+            return system.files.copyDir(src, dst, options);
+        }
+
+        // if dst is folder, copy file name from src
+        if (File(dstFile) instanceof Folder)
+        {
+            dstFile = new File(dstFile.fsName+"/"+srcFile.name);
+        }
+
+        var newFile;
+
+        var newFileName,
+            newFilePath;
+
+        var newFolder = dstFile.parent;
+
+        // Passed Options
+        if(typeof options !== "object") options = {};
+        options.defaults(
             {
-                // Set
-                if (!prop.set)
-                    throw new Error(['Property "', name, '" is read-only.'].join(''));
-
-                // Set value
-                prop.set.call(null, prop, documentId, value);
-
-                // Chaining
-                return documents;
+                overwrite: true,
+                silent: false,
+                unlock:true,
+                masks:[],
+                excludes:[],
+                replacements:[],
+                dialogId:1038876
             }
-        }
-    };
+        );
 
-    /**
-     * Resizes the currently active document. Supports scale styles (Document.resizeImage does not).
-     * @param {Number} width  New width. If height is not specified an uniform scaling is applied.
-     * @param {Number} [height] New height, defaults to original document height.
-     * @param {Number} [resolution] New resolution, defaults to original document resolution.
-     * @param {ResampleMethod} [resampleMethod=ResampleMethod.BICUBICAUTOMATIC] Scaling resample method.
-     * @param {Boolean} [scaleStyles=true] Whether to scale styles (only available when using uniform scaling).
-     * @return Chained reference to document utilities.
-     */
-    documents.resizeImage = function (width, height, resolution, resampleMethod, scaleStyles)
-    {
-        // Get original document values
-        var originalWidth = documents.prop('width');
-        var originalHeight = documents.prop('height');
-        var originalResolution = documents.prop('resolution');
+        // Dialog setup
+        var dialogId = 1038876;
+        var dialogArgs = { id:dialogId, skippable:true, buttons:["OK","Skip"]};
+            dialogArgs.title = "Overwrite File?";
+            dialogArgs.text = "Do you want to overwrite existing files?";
+        var dialogResult;
+        Lifter.dialogs.clearCached(dialogId);// clear or subsequent non-recursive calls pick up old input
 
-        // Get resize values
-        if (typeof width === 'number')
-            width = new UnitValue(width, 'px');
-        else if (!(width instanceof UnitValue))
-            width = originalWidth;
+        // log.log( "---  src  ---" );
+        // log.log( src );
 
-        if (typeof height === 'number')
+        log.log( "\n[]------  system.files.copy()  ------[]\n" );
+
+        log.log( "options:" );
+        for(var opt in options)
         {
-            height = new UnitValue(height, 'px');
+            if( !options.hasOwnProperty (opt) ) continue;
+            log.log( "-- "+opt+":" + options[opt] );
         }
-        else if (!(height instanceof UnitValue))
+
+        log.log( "Src File: \n" + srcFile );
+        log.log( "Dst File: \n" + dstFile );
+
+        // sanity check
+        log.log( "srcFile.exists "+srcFile.exists );
+        // log.log( "srcFile.fsName "+srcFile.fsName );
+        if (!srcFile.exists || srcFile.name === ".DS_Store") { return; }
+
+        // create folder if missing
+        if(!system.files.makeDir(newFolder)) { return; }
+
+        // Mask tests to filter files
+        if(system.files.maskTest(srcFile.name, options.masks) === false){return;}
+        if(system.files.excludeTest(srcFile.name, options.excludes) === false){return;}
+
+        // replace text in file name
+        newFileName = dstFile.name;
+        for(var r=0;r<options.replacements.length;r++)
         {
-            if (width.type === '%')
+            var rep = options.replacements[r];
+            newFileName = newFileName.replace(new RegExp(rep[0],'g'),rep[1]);
+        }
+
+        newFilePath = newFolder.fsName + "/" + newFileName;
+
+        log.log("\n-- Src:\n"+srcFile.fsName);
+        log.log("\n-- Dst:\n"+new Folder(newFilePath).fsName);
+
+
+        newFile = File(newFilePath);
+        log.log("\n--- exists "+newFile.exists+" ---");
+
+        // if file exists and not silent mode, bring up confirm dialog
+        if (newFile.exists && options.silent === false && typeof Lifter.dialogs.confirm === "function")
+        {
+            // Message
+            if(!newFile.readonly)
             {
-                // If width is specified in percentage use uniform scaling
-                height = new UnitValue(width.value, '%');
-                height.baseUnit = new UnitValue(originalHeight.as('px'), 'px');
+                dialogArgs.text = "\"" + newFile.name + "\" already exists. Do you want to overwrite it?";
+            }else{
+                dialogArgs.text = "\"" + newFile.name + "\" is set to Read-Only. It may be locked by Perforce. Do you want to overwrite it?";
             }
-            else
+
+            dialogResult = Lifter.dialogs.confirm (dialogArgs);
+            dialogCache = Lifter.dialogs.getCached(dialogId);
+
+            options.overwrite = (dialogCache && dialogCache.value !== 1);
+            options.silent = (dialogCache && dialogCache.skip === true);
+
+            log.log("dialogResult: " + (dialogResult));
+            log.log("dialogCache: " + (dialogCache));
+            // log.log("dialogCache.value: " + (dialogCache.value));
+            // for(var opt in options)
+            // {
+            //     if( !options.hasOwnProperty (opt) ) continue;
+            //     log.log( opt+":" + options[opt] );
+            // }
+        }
+
+        // Copy or skip?
+        if( !newFile.exists || options.overwrite )
+        {
+            try {
+                srcFile.copy(newFilePath);
+            } catch (e) {
+                log.error(e.message);
+                return;// "error:copyFiles:could not copy file "+newFilePath+":"+ e.message;
+            }
+
+            // Sanity check and return error if missing
+            newFile = File(newFilePath);
+            if (! newFile.exists){
+                log.error("copyFiles:file not created "+newFilePath+ ", "+ newFile.error);
+                return;
+            }
+
+            // make writeable
+            if(options.unlock) newFile.readonly = false;
+
+            // return copied file
+            return newFile;
+        } else {
+            log.log ("User skipped this one...");
+        }
+    };
+
+
+    /**
+     * Recurseively copy a file or folder path with options and dialogs
+     * @param  {File/Folder/String} src     Source file (can be a string)
+     * @param  {File/Folder/String} dst     Destination path (can be a string)
+     * @param  {Object} options     Options to override defaults...
+     *                                  {
+     *                                     overwrite: true,// overwrite existing files
+     *                                     silent: false,// no dialogs
+     *                                     unlock:true,// unlock read-only files after copy
+     *                                     masks:[],//file masks (i.e. ["*.psd","*.tif"])
+     *                                     excludes:[],//files to exclude (i.e. ["*.config","node_modules"])
+     *                                     replacements:[]// list of pairs to replace in file name. ex. [["tmp","TheThing"],[" ","_"]]
+     *                                  }
+     * @return {Array}         Resulting list of File objects that were copied.
+     */
+    system.files.copyDir = function copyDir( src, dst, options ) {
+        // mutable vars accept file path or File/Folder handle...
+        var srcFolder = (typeof src == 'string')? new Folder(src): src;
+        var newFolder = (typeof dst == 'string')? new Folder(dst): dst;
+
+        // if single file, pass to system.files.copy like a snake eating its tail
+        if (File(srcFolder) instanceof File)
+        {
+            return [system.files.copy(src, dst, options)];// return an array!
+        }
+
+        var srcFiles,
+            srcFile;
+
+        var newFileName,
+            newFilePath;
+
+        // Passed Options
+        if(typeof options !== "object") options = {};
+        options.defaults(
             {
-                height = originalHeight;
+                overwrite: true,
+                silent: false,
+                unlock:true,
+                masks:[],
+                excludes:[],
+                replacements:[]
+            }
+        );
+
+        // return val
+        var result = [];
+
+        // log.log( "---  src  ---" );
+        // log.log( src );
+
+        log.log( "\n[]------  copyFiles  ------[]\n" );
+
+        log.log( "options: \n" );
+        for(var opt in options)
+        {
+            if( !options.hasOwnProperty (opt) ) continue;
+            log.log( "-- "+opt+":" + options[opt] );
+        }
+
+        log.log( "Src Dir: \n" + src );
+        log.log( "Dst Dir: \n" + dst );
+
+        // sanity check
+        if (!srcFolder.exists) { return; }
+
+        // create folder if missing
+        if(!system.files.makeDir(newFolder)) { return; }
+        //log.log( "---  newFolder  ---" );
+        //log.log( newFolder );
+
+        // get file list from folder
+        srcFiles = srcFolder.getFiles( );
+
+        //log.log( "\n---  dir  ---" );
+        log.log( 'Items: ' + srcFiles.length );
+        srcFiles.forEach(function(srcFile){
+            log.log(' - '+srcFile.name);
+        });
+
+        for (var f in srcFiles)
+        {
+            if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
+            srcFile = srcFiles[f];
+
+            newFilePath = newFolder.fsName + "/" + srcFile.name;
+
+            if (srcFile instanceof File)
+            {
+                var newFile = system.files.copy(srcFile,newFilePath,options);
+                if(newFile) {
+                    result.concat(newFile);
+                }
+    		}
+            else if (srcFile instanceof Folder)
+            {
+
+                var newSubFolder = new Folder(newFilePath);
+
+                try {
+
+                    if( newSubFolder.create() === false )
+                    {
+                        log.error("copyFiles:error creating sub-directory "+newSubFolder.fsName);
+    	                return;
+                    }
+                } catch (e) {
+                    log.error(e.message);
+                    return;
+                }
+                result = system.files.copyDir(srcFile, newSubFolder, options);
+            }
+            else {
+                log.log ("Skipping this one...");
             }
         }
+        // return list of copied files
+        return result;
+    };
 
-        resolution = typeof resolution === 'number' ? resolution : originalResolution;
-        typeof scaleStyles === 'boolean' || (scaleStyles = true);
 
-        // Early exit if image is not modified
-        if (width === originalWidth
-            && height === originalHeight
-            && resolution === originalResolution)
-            return documents;
+    /**
+     * Recurseively remove a file or folder path with options and dialogs
+     * @param  {File/Folder/String} src     Source file/folder (can be a string)
+     * @return {Array}         Resulting list of File objects that were copied.
+     */
+    system.files.remove = function copyFiles( src, dst, options )
+    {
+        // mutable vars accept file path or File/Folder handle...
+        var srcFolder = (typeof src == 'string')? new Folder(src): src;
+        var newFolder = (typeof dst == 'string')? new Folder(dst): dst;
 
-        var desc = new ActionDescriptor();
+        var srcFiles,
+            srcFile,
+            newFile;
 
-        if (width/originalWidth === height/originalHeight)
+        // sanity check
+        if (!srcFolder.exists) { return; }
+
+        log.log( "\n[]------  copyFiles  ------[]\n" );
+
+        log.log( "Src: \n" + srcFolder );
+
+        srcFiles = srcFolder.getFiles( );
+
+        log.log( 'Items: ' + srcFiles.length );
+        srcFiles.forEach(function(srcFile){
+            log.log(' - '+srcFile.name);
+        });
+
+        for (var f in srcFiles)
         {
-            // Constrain proportions
-            desc.putUnitDouble(c2id("Wdth"), c2id("#Pxl"), width.as('px'));
-            desc.putBoolean(c2id("CnsP"), true);
-
-            // Scale styles
-            desc.putBoolean(s2id("scaleStyles"), scaleStyles);
-        }
-        else
-        {
-            // Non-uniform scaling
-            desc.putUnitDouble(c2id("Wdth"), c2id("#Pxl"), width.as('px'));
-            desc.putUnitDouble(c2id("Hght"), c2id("#Pxl"), height.as('px'));
+            if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
+            srcFile = srcFiles[f];
         }
 
-        // Resolution
-        if (resolution !== originalResolution)
-            desc.putUnitDouble(c2id("Rslt"), c2id("#Rsl"), resolution);
-
-        // Resample method
-        switch (resampleMethod)
-        {
-            case ResampleMethod.NEARESTNEIGHBOR: resampleMethod = s2id("nearestNeighbor"); break;
-            case ResampleMethod.BILINEAR: resampleMethod = s2id("bilinear"); break;
-            case ResampleMethod.BICUBIC: resampleMethod = s2id("bicubic"); break;
-            case ResampleMethod.BICUBICSHARPER: resampleMethod = s2id("bicubicSharper"); break;
-            case ResampleMethod.BICUBICSMOOTHER: resampleMethod = s2id("bicubicSmoother"); break;
-            default: resampleMethod = s2id("bicubicAutomatic"); break;
-        }
-        desc.putEnumerated(c2id("Intr"), c2id("Intp"), resampleMethod);
-
-        // Resize
-        executeAction(c2id("ImgS"), desc, _dialogModesNo);
-        return documents;
-    };
-
-    /**
-     * Duplicates the currently active document.
-     * @param {String} [duplicateName] Name of the document duplicate.
-     * @param {Boolean} [merge] Whether to merge document layers.
-     * @return Chained reference to document utilities.
-     */
-    documents.duplicate = function (duplicateName, merge)
-    {
-        var ref = new ActionReference();
-        ref.putEnumerated(c2id('Dcmn'), c2id('Ordn'), c2id('Trgt'));
-
-        var desc = new ActionDescriptor();
-        desc.putReference(c2id('null'), ref);
-
-        if (typeof duplicateName === 'string' && duplicateName.length)
-            desc.putString(c2id('Nm  '), duplicateName);
-
-        if (merge)
-            desc.putBoolean(c2id('Mrgd'), true);
-
-        executeAction(c2id('Dplc'), desc, _dialogModesNo);
-        return documents;
-    };
-
-    /**
-     * Flattens the currently active document.
-     * @return Chained reference to document utilities.
-     */
-    documents.flatten = function ()
-    {
-        executeAction(c2id('FltI'), undefined, _dialogModesNo);
-        return documents;
-    };
-
-    /**
-     * Finds all the documents that match the specified patterns.
-     * @param {Object, Function} patterns Either an hash object specifying search criteria or a custom search function.
-     * @param {Object} [context] Context applied to search function.
-     * @return {Array} An array containing find results.
-     */
-    documents.findAll = _find.bind(null, documents, 0);
-
-    /**
-     * Finds the first document that matches the specified patterns.
-     * @param {Object, Function} patterns Either an hash object specifying search criteria or a custom search function.
-     * @param {Object} [context] Context applied to search function.
-     * @return {Object} Matching object, or null if no match was found.
-     */
-    documents.findFirst = _find.bind(null, documents, 1);
-
-    /**
-     * Finds the last document that matches the specified patterns.
-     * @param {Object, Function} patterns Either an hash object specifying search criteria or a custom search function.
-     * @param {Object} [context] Context applied to search function.
-     * @return {Object} Matching object, or null if no match was found.
-     */
-    documents.findLast = _find.bind(null, documents, 2);
-
-    /**
-     * Sets the currently active document to the specified one.
-     * @param {Number} documentId Document identifier.
-     * @return Chained reference to document utilities.
-     */
-    documents.makeActive = function (documentId)
-    {
-        if (typeof documentId !== 'number')
-            throw new Error(['Invalid document identifier: ', documentId, '.'].join(''));
-
-        var ref = new ActionReference();
-        ref.putIdentifier(c2id('Dcmn'), documentId);
-        var desc = new ActionDescriptor();
-        desc.putReference(c2id('null'), ref);
-        executeAction(c2id('slct'), desc, _dialogModesNo);
-
-        // Chaining
-        return documents;
-    };
-
-    /**
-     * Gets the unique identifier of the currently active document.
-     * @return {Number} Unique identifier of the currently active document.
-     */
-    documents.getActiveDocumentId = function ()
-    {
-        if (documents.count() < 1)
-            return -1;
-        else
-            return documents.prop('documentId');
-    };
-
-    /**
-     * Gets the DOM representation of the currently active document.
-     * @return {Document} The DOM representation of the currently active document, or null if no documents are open.
-     */
-    documents.toDOM = function ()
-    {
-        if (documents.count() < 1)
-            return null;
-        else
-            return app.activeDocument;
     };
 
     // Public API
     /**
-     * Contains low-level methods to work with documents without accessing
-     * Photoshop DOM.
-     *
-     * Documents are identified by two numbers in Photoshop: DocumentId and ItemIndex.
-     *
-     *  - DocumentId: progressive 1-based integer identifier that is guaranteed to be unique for the current
-     *                Photoshop work session. This is used in the functions.
-     *  - ItemIndex: a 1-based integer index that is assigned when documents are open and closed. It is not
-     *               linked in any way with windows location in UI: document with ItemIndex = 0 is not
-     *               guaranteed to be the leftmost one in UI.
-     */
-    Lifter.documents = documents;
-    log.log("Lifter.documents done.");
+    * Contains low-level methods to work with OS and files without accessing Photoshop DOM.
+    */
+    Lifter.system = Lifter.sys = system;
+
+    log.log("Lifter.system done.");
 }());
 
 log.log("Lifter is ready now.");

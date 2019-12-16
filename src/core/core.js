@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+ /* jshint -W014, -W061, -W069 */
+
 /** Cached reference to DialogModes.NO. */
 var _dialogModesNo = DialogModes.NO,
 
@@ -23,8 +25,33 @@ var _dialogModesNo = DialogModes.NO,
     /** Shortcut to 's2id' function. */
     s2id = stringIDToTypeID;
 
+/** Cache for stacked ruler unit changes */
+var _rulerUnitCache = [];
+
+/** Add support for custom events */
+try {
+    var _xLib = new ExternalObject("lib:\PlugPlugExternalObject");
+} catch (err) {
+    throw new Error(['Could not create ExternalObject for event handling: \n"', err].join(''));
+}
+
 // Global public types
-/** 
+
+/** init logging */
+if( _DEVBUILD ) {
+    Lifter.log = new ExtendScript_Log($.global, 0, "Lifter", true, false);
+} else {
+    Lifter.log = new ExtendScript_Log($.global, 4, "Lifter", false);
+}
+
+if(typeof log !== 'object'){log = Lifter.log;}
+
+//** init dialog helper */
+Lifter.dialogs = new ExtendScript_Dialogs($.global, true);
+
+log.log("LOADING Lifter core ...");
+
+/**
  * Contains utility methods to deal with Enumerators.
  */
 var Enumeration = this.Enumeration = function Enumeration() { };
@@ -98,7 +125,7 @@ Enumeration.toArray = function (enumeration)
     return result;
 };
 
-/** 
+/**
  * Represents an enumeration value by trying to mimic the built-in Enumerator class.
  */
 var Enumerator = this.Enumerator = function Enumerator(name, value)
@@ -140,7 +167,7 @@ Enumerator.prototype = {
     },
 };
 
-/** 
+/**
  * Represents a UnitDouble action descriptor property.
  * Useful to be able to store the UnitDouble type while still being
  * able to easily perform operations using its value.
@@ -184,7 +211,7 @@ UnitDouble.prototype = {
     },
 };
 
-/** 
+/**
  * Represents bounds information for a layer.
  */
 var LayerBounds = this.LayerBounds = function LayerBounds(top, left, bottom, right)
@@ -238,6 +265,15 @@ LayerColor.GREEN = new Enumerator('LayerColor.GREEN', c2id('Grn '));
 LayerColor.BLUE = new Enumerator('LayerColor.BLUE', c2id('Bl  '));
 LayerColor.VIOLET = new Enumerator('LayerColor.VIOLET', c2id('Vlt '));
 LayerColor.GRAY = new Enumerator('LayerColor.GRAY', c2id('Gry '));
+
+
+/**
+ * Enumerates layer mask types. Useful for making selections. This is not native.
+ */
+var LifterMaskType = this.LifterMaskType = function LifterMaskType() { };
+LifterMaskType.TRANSPARENCY = new Enumerator('LifterMaskType.TRANSPARENCY', 0);
+LifterMaskType.LAYERMASK = new Enumerator('LifterMaskType.USERMASK', 1);
+LifterMaskType.VECTORMASK = new Enumerator('LifterMaskType.VECTORMASK', 2);
 
 /**
  * Enumerates blend modes. Acts as an useful proxy to Photoshop BlendMode enumeration.
@@ -298,7 +334,26 @@ ApplyImageChannel.Blue = new Enumerator('ApplyImageChannel.Blue', c2id('Bl  '));
 
 
 // Global utilities
-/** 
+
+/**
+* Store current Ruler Unit settings and set to new unit setting
+* @param {Int} units a Units.<something> value, eg. Units.PIXELS
+*/
+var setRuler = Lifter.setRuler = function setRuler (units)
+{
+    _rulerUnitCache.push(app.preferences.rulerUnits);
+    app.preferences.rulerUnits = units;
+};
+
+/**
+* Reset Ruler Units to stored settings
+*/
+var resetRuler = Lifter.resetRuler = function resetRuler (units)
+{
+    app.preferences.rulerUnits = _rulerUnitCache.pop();
+};
+
+/**
  * Gets the descriptor property identified by the specified key (encoded as typeId).
  * Type must be a valid DescValueType enumerator. If type is not provided it is
  * automatically guessed.
@@ -324,9 +379,38 @@ function _getDescriptorProperty(desc, key, type)
         case DescValueType.UNITDOUBLE: return new UnitDouble(desc.getUnitDoubleType(key), desc.getUnitDoubleValue(key));
         default: throw new Error(['Unsupported descriptor value type: "', type, '".'].join(''));
     }
-};
+}
 
-/** 
+Lifter.getDescPropById = _getDescPropById;
+function _getDescPropById(desc, tid)
+{
+    try{
+        return _getDescriptorProperty(desc, tid);
+    } catch (e) {
+        log.warn('Invalid descriptor property: "'+tid+'".'+e);
+        return;
+    }
+}
+
+Lifter.getDescPropByName = _getDescPropByName;
+function _getDescPropByName(desc, name)
+{
+    var tid, subProps;
+    var prop = name;
+
+    var dotTest = name.indexOf(".");
+    if(dotTest !== -1 ) {
+        prop = name.substring(0, dotTest);
+        subProps = name.substring(dotTest+1, name.length);
+        desc = _getDescPropById(desc, s2id(prop)).value;
+        return _getDescPropByName(desc, subProps);
+    }
+    else {
+        return _getDescPropById(desc, s2id(prop));
+    }
+}
+
+/**
  * Gets a wrapped ActionDescriptor, whose properties can be accessed and set using
  * Lifter syntactic sugar.
  */
@@ -334,8 +418,17 @@ function _getWrappedActionDescriptor(desc, props, id)
 {
     var fn = function (desc, props, id, name, value)
     {
-        if (!props.hasOwnProperty(name))
-            throw new Error(['Invalid property: "', name, '".'].join(''));
+        if (typeof value === 'undefined')
+        {
+            try{
+                return _getDescriptorProperty(desc, s2id(name));
+            } catch (e) {
+                log.warn(['Invalid layer property: "', name, '".'].join(''));
+                return;
+            }
+        } else {
+            throw new Error(['Property "', name, '" is read-only.'].join(''));
+        }
 
         var prop = props[name];
 
@@ -368,15 +461,15 @@ function _getWrappedActionDescriptor(desc, props, id)
         innerDescriptor: desc,
         prop: fn.bind(null, desc, props, id),
     };
-};
+}
 
-/** 
+/**
  * Converts a 0-255 integer value to its 100-based percentage equivalent.
  * @private
  */
-function _byteToPercent(value) { return (value / 255.0) * 100.0; };
+function _byteToPercent(value) { return (value / 255.0) * 100.0; }
 
-/** 
+/**
  * Iterates over a collection searching for the specified patterns.
  * @private
  */
@@ -386,13 +479,15 @@ function _find(collection, findType, patterns, context)
     {
         for (var j = 0; j < keysLength; j++)
         {
+            var matchPattern = patterns[keys[j]];
+            var matchTarget = collection.prop(id, keys[j]);
             if (patterns[keys[j]] !== collection.prop(id, keys[j]))
                 return false;
         }
 
         found.push(id);
         return true;
-    };
+    }
 
     if (typeof patterns !== 'function')
     {
@@ -439,19 +534,95 @@ function _find(collection, findType, patterns, context)
     {
         collection.forEach(patterns, context);
     }
-};
+}
 
-/** 
+/**
+ * Fakes function overloading for an expected argument set of (Number,Bool)
+ * by mutating the argument array directly.
+ * Allows for things like fn(), fn(5), fn(true), fn(2, false)
+ *
+ * @private
+ * @method      _overloadFunction_Number_Bool
+ * @param       {Array}                      arguments     passed arguments from a function
+ * @param       {Number}                      numberDefault Default if not passed as arg
+ * @param       {Boolean}                      boolDefault   Default if not passed as arg
+ * @void
+ */
+function _overloadFunction_Number_Bool (arguments, numberDefault, boolDefault) {
+    // overload
+    if (typeof arguments[0] === 'boolean')
+    {
+        arguments[1] = arguments[0];
+        arguments[0] = undefined;//no id
+    }
+
+    // default if NaN
+    arguments[0] = isNaN(arguments[0])? numberDefault:arguments[0];
+
+    // default and set to actual boolean
+    if( boolDefault === true ) {
+        arguments[1] = (arguments[1] !== false);// always true unless false
+    } else {
+        arguments[1] = (arguments[1] === true);// always false unless true
+    }
+}
+
+/**
+ * Fakes function overloading for an expected argument set of (Number,Obj)
+ * by mutating the argument array directly.
+ * Allows for things like fn(), fn(5), fn(SelectionType.REPLACE), fn(2, myReference)
+ *
+ * @private
+ * @method      _overloadFunction_Number_Obj
+ * @param       {Array}                      arguments     passed arguments from a function
+ * @param       {Number}                      numberDefault Default if not passed as arg
+ * @param       {Object}                      objDefault   Default if not passed as arg
+ * @void
+ */
+function _overloadFunction_Number_Obj(arguments, numberDefault, objDefault) {
+    // overload
+    if (typeof arguments[0] === 'object') {
+        arguments[1] = arguments[0];
+        arguments[0] = undefined; //no id
+    }
+
+    // default if NaN
+    arguments[0] = isNaN(arguments[0]) ? numberDefault : arguments[0];
+
+    // default and set to actual boolean
+    if (typeof arguments[1] !== 'object' && typeof objDefault === 'object') {
+        arguments[1] = objDefault;
+    }
+}
+
+
+/**
  * Gets a valid File object from the passed parameter.
  * @private
  */
-function _ensureFile(file)
+function _ensureFile(myFile)
 {
-    if (!(file instanceof File))
-        file = new File(file);
+    if (!(myFile instanceof File))
+        myFile = new File(myFile);
 
-    if (!file.exists)
-        throw new Error(['The specified file does not exists: "', file, '".'].join(''));
+    if (!myFile.exists)
+        throw new Error(['The specified file does not exists: "', myFile, '".'].join(''));
 
-    return file;
-};
+    return myFile;
+}
+
+/**
+ * Executes a jsx file or errors
+ * @private
+ * @param {File} File object.
+ */
+function _evalFile (myFile){
+    //TODO: if(_debug) log(["Eval: ", jsxFile].join(''));
+    try{
+        $.evalFile( myFile );
+    } catch (err) {
+        throw new Error(['Eval error: "', myFile, '".\n',err].join(''));
+    }
+}
+
+log.log("Lifter core done.");
