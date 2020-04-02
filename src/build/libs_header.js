@@ -14,3 +14,4 @@
 // Partly for tidiness, but mostly because it explodes and dies on es5 Date object.
 // Inelegant sanity check... is to see if we have an es5 shim or not.
 if(typeof [].map !== "function") {
+    $.strict = false;
