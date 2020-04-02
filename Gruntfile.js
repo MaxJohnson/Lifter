@@ -26,9 +26,9 @@ module.exports = function (grunt)
         // Common
         libs = [
             'src/build/libs_header.js',
+            'src/libs/json3.js',
             'src/libs/es5-shim.js',
             'src/libs/polyfills.js',
-            'src/libs/json2.js',
             'src/libs/extendscript_logfile.jsxinc',
             'src/libs/extendscript_log.jsxinc',
             'src/libs/extendscript_dialogs.jsxinc',
