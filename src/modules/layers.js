@@ -1555,7 +1555,7 @@
                 try {
                     desc = executeActionGet(ref);
                 } catch (e) {
-                    throw new Error('Unable to find '+typeIDToStringID(prop.typeId)+': layers do not have that property or it is un-gettable.');
+                    throw new Error('Unable to find '+typeIDToStringID(prop.typeId)+' on "' + layers.prop(layerId, 'name') + '": layers do not have that property or it is un-gettable.');
                 }
 
                 if (prop.get)
@@ -1979,6 +1979,37 @@
             throw new Error('Layer '+layers.prop(null, 'name')+' must be a smart object.');
 
     }
+
+    layers.smartObjects.isCloudFile = function isCloudFile(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var isCloudFile = (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.OBJECTTYPE);
+        return isCloudFile;
+    }
+
+    layers.smartObjects.getCloudFilePath = function getCloudFilePath(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var str;
+		var lookUpFile = new File(Folder.userData + "/Adobe/Creative Cloud Libraries/LIBS/librarylookupfile");
+		if(!lookUpFile.exists) {
+			throw "Lookup reference file for cloud assests not found.";
+		}
+
+        lookUpFile.open('r')
+		str = lookUpFile.read();
+		lookUpFile.close();
+
+		var assetUrl = soDesc.getObjectValue(stringIDToTypeID('link')).getString(stringIDToTypeID('elementReference'));
+        var refKeys = assetUrl.split("/adobe-libraries/")[1].split(";node=");
+
+		var lookUpObj = eval('('+str+')');
+		var pathToSo = lookUpObj.libraries[refKeys[0]].elements[refKeys[1]].reps[0].path;
+
+		if(!pathToSo) {
+            throw "Cached cloud file not found in " + pathToSo;
+        }
+
+		return pathToSo;
+	}
 
     /** TODO: coverage for these guys...if possible
 
