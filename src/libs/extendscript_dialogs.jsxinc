@@ -242,13 +242,6 @@ Also, I'm not trying to solve every dialog problem in one API. If there's someth
 // Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
 ;
 
-// shim in log
-try{ log.log; }
-catch(e){
-    log = {};
-    log.log = function(i){ $.writeln(i); };
-}
-
 // UMD for compatability with AMD and Node require, but still support a global constructor in the ExtendScript context
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) {
@@ -264,6 +257,14 @@ catch(e){
 }($.global, function (root, overrideNative) {// IIFE straight into the UMD, attaching to the $.global space
 
     $.strict = true;
+
+    // shim in log
+    try{ log.log(''); }
+    catch(e){
+        log = {};
+        log.log = function(i){ $.writeln(i); };
+    }
+
     log.log("Making extendscript Dialogs...");
 
     // Default to override global dialogs.
@@ -290,7 +291,7 @@ catch(e){
             w.message.maximumSize = [1000,1000];
         }
         return w;
-    }
+    };
 
     /**
      * Add basic default static text message to existing dialog
@@ -305,10 +306,10 @@ catch(e){
         if( skippable )
         {
             w.cbNoAskAgain = w.add('checkbox', undefined, 'Don\'t ask about this again.');
-            w.cbNoAskAgain.onClick = function(){ _UICache[id].skip = w.cbNoAskAgain.value };
+            w.cbNoAskAgain.onClick = function(){ _UICache[id].skip = w.cbNoAskAgain.value;};
         }
         return w;
-    }
+    };
 
     /**
      * Add basic default static text message to existing dialog
@@ -334,7 +335,7 @@ catch(e){
         w.buttonGroup = w.add('group');
         w.buttonGroup.orientation = "row";
 
-        for( btn in buttons )
+        for( var btn in buttons )
         {
             if( !buttons.hasOwnProperty (btn) ) continue;// sanity check for shims on for/in loops
 
@@ -348,7 +349,7 @@ catch(e){
         w.defaultElement = w.buttonGroup.children[(w.buttonGroup.children.length-1)];
         w.cancelElement = w.buttonGroup.children[0];
         return w;
-    }
+    };
 
     /**
      * Get cached UI options object, if anyway
@@ -356,9 +357,9 @@ catch(e){
      * @return {Object}    Cached UI options object or undefined
      */
     Dialogs.getCached = function (id) {
-        if(typeof id === "undefined"){id=-1};
+        if(typeof id === "undefined"){id=-1;}
         return _UICache[id];
-    }
+    };
 
     /**
      * Get cached UI options object, if anyway
@@ -366,9 +367,9 @@ catch(e){
      * @return {Object}    Cached UI options object or undefined
      */
     Dialogs.clearCached = function (id){
-        if(typeof id === "undefined"){id=-1};
+        if(typeof id === "undefined"){id=-1;}
         _UICache[id] = undefined;
-    }
+    };
 
     /**
      * Replaces standard alert with prettier and skippable ScriptUI version
@@ -393,7 +394,7 @@ catch(e){
         args.buttons = args.buttons || ["OK"];
 
         return Dialogs.confirm(args);
-    }
+    };
 
     /**
      * Replaces standard confirm with prettier and skippable ScriptUI version
@@ -445,11 +446,11 @@ catch(e){
         _addButtons(w,args.id,args.buttons);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
         return w.show();
-    }
+    };
 
     /**
      * Replaces standard prompt with prettier and skippable ScriptUI version
@@ -525,15 +526,15 @@ catch(e){
         _addButtons(w,args.id,args.buttons, onClickDlgButton);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
 
         if( w.show() !== 0 )
         {
             return _UICache[args.id].value;
         }
-    }
+    };
 
     /**
      * Dialog with dropdown menu
@@ -600,20 +601,20 @@ catch(e){
         _addButtons(w,args.id,args.buttons, onClickDlgButton);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
 
         if( w.show()!== 0 )
         {
             return _UICache[args.id].value;
         }
-    }
+    };
 
     // mimic functionality from native JS dialogs...
     function alertNative (arg) {
         var args = (typeof arg == "object")? arg:{title:"Alert",id:-1,text:arg, buttons:["OK"]};
-        Dialogs.alert(arg);
+        Dialogs.alert(args);
     }
     function confirmNative (arg) {
         if(typeof arg == "object") {
@@ -632,26 +633,18 @@ catch(e){
         root.Dialogs = Dialogs;
         if(root !== $.global)
         {
-            try {
-                root.alert = alertNative;
-                root.confirm = confirmNative;
-                root.prompt = promptNative;
-            } catch(e) {
-                log.log("[ERROR] "+e.message);
-            }
+            root.alert = alertNative;
+            root.confirm = confirmNative;
+            root.prompt = promptNative;
         }
     }
 
     // replace native js dialogs with ours
     if(overrideNative === true) {
         $.sleep(200);// sleep or sometimes native alert is read-only...
-        try {
-            $.global.alert = alertNative;
-            $.global.confirm = confirmNative;
-            $.global.prompt = promptNative;
-        } catch(e) {
-            log.log("[ERROR] "+e.message);
-        }
+        $.global.alert = alertNative;
+        $.global.confirm = confirmNative;
+        $.global.prompt = promptNative;
     }
 
     // return a reference
