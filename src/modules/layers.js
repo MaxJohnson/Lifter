@@ -23,15 +23,33 @@
 // - Method: move layer!
 
 ; (function () {
-    log.log("Lifter.layers loading...");
+    log.debug("Lifter.layers loading...");
     /**
      * @namespace
      * @alias Lifter.layers
      */
+
+    /**
+     * Unique layer id. Will fallback to current active layer id if null or undefined
+     * @typedef {(Number|null)} LayerId
+     */
+
     var layers = {};
 
     /** Utility object used to temporary hold data during heavy operations. @private */
     var _cache = {};
+
+    _cache.refresh = function _cacheRefresh() {
+        // Cleanup cache
+        delete _cache['hasBackground'];
+        delete _cache['layerCount'];
+        // Cache some information to speed up the operation
+        _cache['hasBackground'] = layers.hasBackground();
+        _cache['layerCount'] = layers.count();
+    };
+
+    //Public access to refresh
+    layers.cacheRefresh = _cache.refresh;
 
     /** Sets the passed layer as active and executes the specified callback. @private */
     function _wrapSwitchActive(layerId, callback, context)
@@ -179,6 +197,15 @@
         return desc;
     };
 
+    /**
+     * Gets the DOM representation of the currently active document.
+     * @return {Document} The DOM representation of the currently active document, or null if no documents are open.
+     */
+    layers.toDOM = function toDom(layerId)
+    {
+        layers.stack.makeActive(layerId);
+        return app.activeDocument.activeLayer;
+    };
 
     /** Supported layer properties. This is public so that additional properties can be added at runtime. */
     /**
@@ -1402,13 +1429,13 @@
             throw new Error('Callback must be a valid function.');
 
         var n, i;
-
-        // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
-        // Cache some information to speed up the operation
-        _cache['hasBackground'] = layers.hasBackground();
-        _cache['layerCount'] = layers.count();
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
+        // // Cache some information to speed up the operation
+        // _cache['hasBackground'] = layers.hasBackground();
+        // _cache['layerCount'] = layers.count();
 
         if (reverse)
         {
@@ -1433,9 +1460,11 @@
             }
         }
 
-        // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
+        // refresh in case layers were moved around
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
 
         // Chaining
         return layers;
@@ -1477,6 +1506,51 @@
             while (i < n)
             {
                 if (callback.call(context, i, activeLayerIds[i]))
+                    break;
+                i++;
+            }
+        }
+
+        // Chaining
+        return layers;
+    };
+
+    /**
+     * Iterates over list of layer ids, executing the specified callback on each element.
+     * Please note: Adding or removing layers
+     * while iterating is not supported.
+     * @param {Number[]} layerIds          Array of layer ids to iterate through.
+     * @param {Function} callback       Callback function. It is bound to context and invoked with two arguments (itemIndex, layerId).
+     *                                  If callback returns true, iteration is stopped.
+     * @param {Object} [context=null]   Callback function context.
+     * @param {Boolean} [reverse=false] Whether to iterate from the end of the layer collection.
+     * @return Chained reference to layer utilities.
+     */
+    layers.forEachId = function (layerIds, callback, context, reverse)
+    {
+        if (typeof callback !== 'function')
+            throw new Error('Callback must be a valid function.');
+
+        var n, i;
+        if (reverse)
+        {
+            i = layerIds.length;
+            n = 0;
+
+            while (--i >= n)
+            {
+                if (callback.call(context, i, layerIds[i]))
+                    break;
+            }
+        }
+        else
+        {
+            n = layerIds.length;
+            i = 0;
+
+            while (i < n)
+            {
+                if (callback.call(context, i, layerIds[i]))
                     break;
                 i++;
             }
@@ -1590,7 +1664,7 @@
     /**
      * Finds all the layers with names matching the string or RegExp.
      * @param {String, RegExp} Exact string or regular expression to search in name.
-     * @return {Array} An array containing seach results.
+     * @return {Number[]} An array containing seach results.
      */
      layers.findAllByName = function ( search )
      {
@@ -1629,42 +1703,97 @@
     layers.findLast = _find.bind(null, layers, 2);
 
     /**
-     * Gets a list of all parents of the active or specified layer (or topmost layer of active layers).
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @return {Array} LayerId of the all layer's parent groups in ordered list.
+     * Gets an id list of all parents of the active or specified layer (or topmost layer of active layers).
+     * @param {Number} [layerId=Active layer] Layer to get parents from
+     * @param {Boolean} [doAll] If true, returns entire parent heirarchy otherwise immediate parent only.
+     * @return {Number[]} LayerIds of the all layer's parent groups in ordered list.
      */
-    layers.getParentGroupIds = function (layerId)
+    layers.getParentIds = function (inLayerId, doAll)
     {
-        var parentIDs = [];
-        var tgtId = (typeof layerId == "number" )? layerId:layers.prop("layerId");
-        // log.log(tgtId);
+        var n;
+        var i;
+        var layerId;
+        var parentIds = [];
+        var depth = 1;//if < 1, we are deeper in nested groups
+
+        //allow for getParentIds(true);
+        if (typeof inLayerId === 'boolean') { doAll = inLayerId; }
+        if (typeof inLayerId !== 'number') { inLayerId = layers.prop('layerId'); }
+
+        _cache.refresh();
+        n = _cache['layerCount'] + 1;
+        i = layers.prop(inLayerId, 'itemIndex');
+
+        while (++i < n)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if ( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth > 0) {
+                    parentIds.push(layerId);
+                    if(doAll) {
+                        depth = 0;
+                    } else {
+                        break;
+                    }
+                }
+                depth ++;
+            } else if ( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+            }
+        }
+
+        return parentIds;
+    };
+
+    /**
+     * Gets an id list of all valid children of the active or specified layer set.
+     * @param {(Number|null)} [layerId=Active layer] Layer identifier
+     * @param {Boolean} [doSubsets] get ids from subsets (subfolders) can be passed as only arg to use active layer.
+     * @return {Number[]} LayerId of the all layer set's child ids in ordered list.
+     */
+    layers.getChildIds = function (layerSetId, doAll)
+    {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var childIDs = [];
+
+        //allow for getChildIds(true);
+        if (typeof layerSetId === 'boolean') { doAll = layerSetId; }
+        if (typeof layerSetId !== 'number') { layerSetId = layers.prop('layerId'); }
+        if(!layers.isGroup(layerSetId)) {
+            throw new TypeError ('getChildIds() - ' + layers.prop(layerSetId, 'name') + ' is not a layer set.');
+        }
+
+        _cache.refresh();
+        i = layers.prop(layerSetId, 'itemIndex');
+        n = 0;
 
         // run in reverse so we can go "top to bottom"
-        layers.forEach( function (itemIndex, layerId) {
-
-            //log.log(itemIndex + ", " +layers.prop(layerId, "name"));
-
-            if( layers.prop(layerId, "type") == LayerType.SETSTART )
-            {
-                parentIDs.push(layers.prop(layerId,"name"));
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
+                depth ++;
             }
-            else if( layers.prop(layerId, "type") == LayerType.SETEND )
-            {
-                parentIDs.pop();
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                if(depth < 1) { break; }// we are at bottom of our target layer group
             }
-            else if( layerId == tgtId )
-            {
-                // log.log(parentIDs);
-                return parentIDs;
+            else {
+                // log.log(i + ", " +layers.prop(layerId, "name"));
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
             }
-        },null,true);
+        }
 
-        return parentIDs;
+        return childIDs;
     };
 
     /**
      * Gets the identifier of all layers.
-     * @return {Array} LayerId of the all layers.
+     * @return {Number[]} LayerIds of all layers.
      */
     layers.getAllLayerIds = function ()
     {
@@ -1675,7 +1804,7 @@
 
     /**
      * Gets the identifier of all active layers.
-     * @return {Array} LayerIds of the currently active layers.
+     * @return {Number[]} LayerIds of the currently active layers.
      */
     layers.getAllActiveLayerIds = function ()
     {
@@ -1709,7 +1838,7 @@
      * Saves a list of layer ids to a cached stack list.
      * @method
      * @param  {Number} cacheId  cacheId to save stack to
-     * @param  {Array}  layerIds list of layer ids to save
+     * @param  {Number[]}  layerIds list of layer ids to save
      * @return {Object}          this layers object for chaining
      */
     layers.stack.saveIdList = function (cacheId, layerIds)
@@ -1797,8 +1926,96 @@
     layers.stack.getPreviousLayerId = _getStackId.bind(null, c2id('Bckw'));
 
     /**
+     * Gets the id of the next sibling layer of the currently active one in the,
+     * heirarchy, skipping children if active layer is a group.
+     * @return {Number} LayerId of the next sibling layer or -1 if bottom of group or stack
+     */
+    layers.stack.getNextSiblingLayerId = function stackGetNextSiblingLayerId(layerId) {
+        var i = layers.prop(layerId, 'itemIndex');
+        var newIndex = i - 1;
+        var lastIndex = (layers.hasBackground())? 0 : 1;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var targetId;
+
+        // log.debug('getNextSiblingLayerId() of name: ' + layers.prop(layerId,'name'));
+
+        _cache.refresh();
+
+        //if next is group, find bottom of group
+        if(layers.isGroup(layerId)) {
+            // run in reverse so we can go "top to bottom"
+            while (--i > 0 && depth > 0)
+            {
+                targetId = layers.getLayerIdByItemIndex(i);
+                // log.debug('    depth: ' + depth + ', i: ' + i + ", " +layers.prop(targetId, "name"));
+                if ( layers.prop(targetId, "type") == LayerType.SETSTART ) {
+                    depth ++;
+                }
+                else if ( layers.prop(targetId, "type") == LayerType.SETEND ) {
+                    depth --;
+                    if(depth < 1) {
+                        // we are at bottom of our target layer group
+                        // jump past the SETEND layer for the group
+                        newIndex = i - 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // log.debug('  newIndex: ' + String(newIndex+1) + '/' + layers.count());
+        //if not bottom of stack
+        if(newIndex >= lastIndex) {
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.log('  Next sibling layer: '+layers.prop(targetId,'name'));
+            //if not bottom of group
+            if(layers.prop(targetId, 'type') !== LayerType.SETEND) {
+                return targetId;
+            }
+        }
+
+        return -1;
+    };
+
+    /**
+     * Gets the id of the previous sibling layer of the currently active one in the,
+     * heirarchy, skipping children if target layer is a group.
+     * @return {Number} LayerId of the previous sibling layer or -1 if top of group or stack
+     */
+    layers.stack.getPreviousSiblingLayerId = function stackGetPreviousSiblingLayerId(layerId) {
+        // NOTE: return id or -1 for easier debug bc 'undefined' or null var passed into
+        // layers.prop(undefinedVar) returns an ActionDescriptor instead of error
+        var newIndex = layers.prop(layerId, 'itemIndex') + 1;
+        var targetId;
+
+        //abort if top of layer stack
+        _cache.refresh();
+        // log.debug('getPreviousSiblingLayerId - name: ' + layers.prop(layerId,'name') + ', index: ' + String(newIndex-1) + '/' + layers.count());
+        if(newIndex > layers.count()) { return -1; }
+
+        targetId = layers.getLayerIdByItemIndex(newIndex);
+
+        //abort if top of group
+        if(layers.isGroup(targetId)) { return -1; }
+        //if prev is group, get parent of last child of that group
+        else if(layers.prop(targetId, 'type') === LayerType.SETEND) {
+            // log.debug(layers.prop(layerId,'name') + ' Prev is group...');
+            newIndex ++;
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.debug('Target inside: '+layers.prop(targetId,'name'));
+            //edge case filter, don't get parent if it is empty group
+            if(layers.isGroup(targetId)) {
+                targetId = layers.getParentIds(targetId)[0];
+                // log.debug('Target parent: '+layers.prop(targetId,'name'));
+            }
+        }
+
+        return targetId;
+    };
+
+    /**
      * Sets the currently active layer to the one identified by the passed LayerId.
-     * @param {Number,Array} layerIdList Layer identifier or array of ids.
+     * @param {(Number|Number[])} layerIdList Layer identifier or array of ids.
      * @param {Boolean} [makeVisible] Whether to make the layer RGB channels visible.
      * @param {Boolean} [add] Whether to add or replace active layer selection.
      * @return Chained reference to layer utilities.
@@ -1882,21 +2099,67 @@
 
     // Groups
     /**
-     * Provides methods to navigate across the layers stack.
+     * Provides methods for manipulating layer groups (sets).
      */
     layers.groups = {};
 
     /**
      * Test if layer is a group
      * @method
-     * @param  {Number} layerId Id of the layer to flatten
+     * @param  {Number} [layerId=active layer] Id of the layer to test
      * @return {Boolean} Layer is a group or not.
      */
     layers.groups.isGroup = function(layerId) {
         return layers.prop(layerId, 'type') == LayerType.SETSTART;
-    },
-    layers.isGroup = layers.groups.isGroup,// convenience alias
+    };
+    layers.isGroup = layers.groups.isGroup;// convenience alias
 
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.getEndIndex = function groupsGetBottomIndex (groupId) {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+
+        if (typeof groupId !== 'number') { groupId = layers.prop('layerId'); }
+
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        _cache.refresh();
+        i = layers.prop(groupId, 'itemIndex');
+        n = 0;
+
+        // run in reverse so we can go "top to bottom"
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            // add depth for new groups, subtract when we hit end of groups
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                depth ++;
+            }
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                // are we at bottom of our target layer group?
+                if(depth < 1) { break; }
+            }
+        }
+        var name = layers.prop(layerId,'name');
+        var isGroup = layers.isGroup(layerId);
+        var prevId = layers.getLayerIdByItemIndex(i+1);
+        var prevName = layers.prop(prevId,'name');
+        // var isGroup = layers.isGroup(layerId);
+        return i;
+    };
 
     /**
      * Make a new group with option to add layers from selected or Id array
@@ -1904,10 +2167,9 @@
      * @param  {String} name      Name for new group
      * @param  {Boolean} addLayers Add layers to group or not
      * @param  {Number,Array} layerIds  layer Id or Array of layer Ids
-     * @return Chained reference to layer utilities.
+     * @return {Number} layer Id of new group.
      */
-    layers.groups.make = function(name, addLayers, layerIds, color)
-    {
+    layers.groups.make = function(name, addLayers, layerIds, color) {
         var idLyr = s2id( "layer" );
         var idOrdn = c2id( "Ordn" );
         var idTrgt = s2id( "targetEnum" );
@@ -1947,21 +2209,257 @@
            descSet.putObject( s2id( "to" ), idLyr, descName );
            executeAction( s2id( "set" ), descSet, DialogModes.NO );
         }
-        return layers;
-    },
+        _cache.refresh();
+        return layers.prop('layerId');
+    };
 
     /**
      * Merge (flatten) a layer group
      * @method
-     * @param  {Number} layerId Id of the layer to flatten
+     * @param  {Number} [layerId=active layer] Id of the layer to flatten
      * @return Chained reference to layer utilities.
      */
     layers.groups.merge = function(layerId) {
         layers.stack.makeActive(layerId);
         executeAction(c2id("Mrg2"), undefined, DialogModes.NO);
+        _cache.refresh();
         return layers;
-    },
+    };
 
+
+    /**
+     * Move a number of layers into the top of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.prepend = function groupsPrepend(groupId, layerIds, ignoreHeirarchy) {
+        // var newIndex = layers.prop(groupId, 'itemIndex');
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATBEGINNING, ignoreHeirarchy);
+        //offset down one to be in top of group
+        // layers.move(layerIds, newIndex, -1);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.append = function groupsAppend(groupId, layerIds, ignoreHeirarchy) {
+        // var groupDOM = layers.toDOM(groupId);
+        // var layerDOM;
+        // var i;
+        // var iCount = layerIds.length;
+        // // var newIndex;
+        // // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        //
+        // for (i = 0; i < iCount; i++) {
+        //     layerDOM = layers.toDOM(layerIds[i]);
+        //     groupDOM.move(layerDOM, ElementPlacement.PLACEATEND);
+        // }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATEND, ignoreHeirarchy);
+        // newIndex = layers.groups.getEndIndex(groupId);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers before (above) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveBefore = function moveBefore(layerIds, targetId, ignoreHeirarchy) {
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEBEFORE, ignoreHeirarchy);
+        // var newIndex = layers.prop(targetId, 'itemIndex');
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move a number of layers to after (below) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveAfter = function moveAfter(layerIds, targetId, ignoreHeirarchy) {
+        // var newIndex = layers.prop(layers.stack.getNextSiblingLayerId(targetId), 'itemIndex');
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEAFTER, ignoreHeirarchy);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move any number of layers to the target index in the stack, with optional
+     * placement and index offset.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer
+     * @param  {ElementPlacement} [position] position relative to target index
+     * @param  {Number} [indexOffset] Id of the target layer (defaults to selected)
+     *                                       (ex. ElementPlacement.PLACEATEND)
+     * @param  {Boolean} [ignoreHeirarchy] if true, will flatten heirarcy of layers being moved
+     * @return Chained reference to layer utilities.
+     */
+    layers.move = function move(layerIds, targetId, placement, indexOffset, ignoreHeirarchy) {
+        // use id so we can dynamically adjust index for multiple moves
+        var targetIndex = layers.prop(targetId,'itemIndex');
+        var newIndex;
+        var moveIds;
+        var i;
+        var iCount;
+        var layerId;
+        var layerIndex;
+        var children;
+        var lastChildId;
+        var lastChildIndex;
+        var groupEndIndex;
+
+        var targetDOM = layers.toDOM(targetId);
+        var layerDOM;
+        var tmpLayerDOM;
+        var tmpLayerIndex;
+
+        function _idFilter(id) { return !children.includes(id); }
+
+        // default args
+        indexOffset = (typeof indexOffset === 'number')? indexOffset : 0;
+        placement = (isDef(placement))? placement : ElementPlacement.PLACEBEFORE;
+
+        if(typeof targetId !== 'number') throw new Error('No invalid target index ' + targetIndex + ' .');
+
+        // happy mutation helpers
+        if (typeof layerIds === 'number') {
+            layerIds = [layerIds];
+        } else if (!L.isDef(layerIds)) {
+            layerIds = layers.stack.getActiveLayerIds();
+        }
+
+        //1st pass filter out children and throw errors
+        //avoids nested heirarchy getting flattened
+        iCount = layerIds.length;
+        moveIds = layerIds;
+        newIndex = targetIndex + indexOffset;
+        for (i = 0; i < iCount; i++) {
+            layerId = layerIds[i];
+            layerIndex = layers.prop(layerId, 'itemIndex');
+
+            // we can skip filtered items!
+            if(moveIds.includes(layerId) === false) {continue;}
+
+            if (layers.isGroup(layerId)) {
+                // can't put a group inside itself! native move() explodes
+                groupEndIndex = layers.groups.getEndIndex(layerId);
+                if (newIndex < layerIndex && newIndex >= groupEndIndex ) {
+                    throw new Error('"' + layers.prop(layerId,'name') + '" can not be moved inside "' + layers.prop(targetId,'name') + '".');
+                }
+
+                //remove children so we don't flatten the heirarchy
+                if(ignoreHeirarchy !== true) {
+                    children = layers.getChildIds(layerId, true);
+                    moveIds = moveIds.filter(_idFilter);
+                }
+            }
+        }
+
+        // 2nd pass do the actual move
+        // but wait, it gets crazier
+        iCount = moveIds.length;
+        for (i = 0; i < iCount; i++) {
+            layerId = moveIds[0];
+
+            log.log('Moving ' + layers.prop(layerId,'name'));
+            newIndex = layers.prop(targetId,'itemIndex') + indexOffset;
+
+            // NOTE: Moving into layer sets is a headache
+            // But moving layersets into others is literally BUGGED in the api.
+            // But also manually moving to bottom of a set via itemIndex has
+            // broken edgecases such as if there's an empty group as the child
+            // of the target group. Nothing just works like it should.
+
+            switch (placement) {
+                case ElementPlacement.PLACEAFTER:
+                    // if it's a group grab next sibling layer?
+                    if(layers.isGroup(targetId)) {
+                        // tmpLayerId = layers.stack.getNextSiblingLayerId(targetId);
+                        newIndex = layers.groups.getEndIndex(targetId) - 1;
+                        // newIndex = layers.prop(tmpLayerId, 'itemIndex');
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.PLACEATEND:
+                    children = layers.getChildIds(targetId);
+                    // extendscript: there's no reliable way to move to the bottom
+                    // of a layer set.
+                    // me: Hold my beer. Watch this.
+                    if(children.length) {
+                        layers.stack.makeActive(targetId);
+
+                        // get last child in target group
+                        lastChildId = children[children.length-1];
+                        lastChildIndex = layers.prop(lastChildId, 'itemIndex');
+
+                        // add temp layer
+                        tmpLayerId = layers.add().prop('layerId');
+
+                        // move tmp layer above last child
+                        layers.prop(tmpLayerId,'itemIndex',lastChildIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId, 'itemIndex');
+
+                        // now swap last child position with tmp layer
+                        layers.prop(lastChildId, 'itemIndex', tmpLayerIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId,'itemIndex');
+
+                        // should now have very last actual index...
+                        newIndex =  tmpLayerIndex - 1;
+
+                        // Thanks! I hate it.
+                        layers.remove(tmpLayerId);
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.INSIDE:
+                case ElementPlacement.PLACEATBEGINNING:
+                    newIndex --;
+                    break;
+                case ElementPlacement.PLACEBEFORE:
+                default:
+                    //move to same index as target
+                    break;
+            }
+
+            try {
+                layers.prop(layerId, 'itemIndex', newIndex);
+            } catch (e) {
+                throw new Error('There was a problem moving "' + layers.prop(layerId,'name') + '" from index ' + layers.prop(layerId,'itemIndex') + ' to ' + newIndex);
+            }
+        }
+        return layers;
+    };
 
     // Smart Objects
     /**
@@ -1969,6 +2467,13 @@
      */
     layers.smartObjects = {};
 
+    /**
+     * Make smart object layer active since some SO operations can crash otherwise.
+     * @method      _ensureSmartObjectIsActive
+     * @param       {Number}  layerId layer id of the smart object
+     * @private
+     * @return      {Object}  the layers object for chaining
+     */
     function _ensureSmartObjectIsActive(layerId) {
 
         // Make sure target layer is active
@@ -1980,23 +2485,62 @@
 
     }
 
+    /**
+     * Check to see if layer is embedded
+     * @method isEmbedded
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is embedded smart object
+     */
+    layers.smartObjects.isEmbedded = function isEmbedded(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return (soDesc && soDesc.getBoolean(s2id('linked')) === false);
+    };
+
+    /**
+     * Check to see if layer is a linked smart object
+     * @method isLinked
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
+    layers.smartObjects.isLinked = function isLinked(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return  (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.ALIASTYPE);
+    };
+
+    /**
+     * Check to see if layer is a CC Library file (not same as Creative Cloud Document?)
+     * @method isCloudFile
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
     layers.smartObjects.isCloudFile = function isCloudFile(layerId) {
         var soDesc = layers.prop(layerId, 'smartObject');
         var isCloudFile = (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.OBJECTTYPE);
         return isCloudFile;
-    }
+    };
 
+    /**
+     * Get the cached local file path for the CC Library object
+     * @method getCloudFilePath
+     * @param  {Number}         layerId layer id of a cloud smart object
+     * @return {String}                 file path to linked cached file
+     */
     layers.smartObjects.getCloudFilePath = function getCloudFilePath(layerId) {
         var soDesc = layers.prop(layerId, 'smartObject');
         var str;
-		var lookUpFile = new File(Folder.userData + "/Adobe/Creative Cloud Libraries/LIBS/librarylookupfile");
-		if(!lookUpFile.exists) {
-			throw "Lookup reference file for cloud assests not found.";
-		}
+        var lookUpFile = new File(Folder.userData + "/Adobe/Creative Cloud Libraries/LIBS/librarylookupfile");
 
-        lookUpFile.open('r')
-		str = lookUpFile.read();
-		lookUpFile.close();
+        if (soDesc.getBoolean(s2id('linkMissing'))) {
+            throw new Error("Link missing in Cloud assest. Bad permissions or deteted library.");
+        }
+
+        if (!lookUpFile.exists) {
+            throw new Error("Lookup reference file for cloud assests not found.");
+        }
+
+        lookUpFile.open('r');
+        str = lookUpFile.read();
+        lookUpFile.close();
 
 		var assetUrl = soDesc.getObjectValue(stringIDToTypeID('link')).getString(stringIDToTypeID('elementReference'));
         var refKeys = assetUrl.split("/adobe-libraries/")[1].split(";node=");
@@ -2005,20 +2549,20 @@
 		var pathToSo = lookUpObj.libraries[refKeys[0]].elements[refKeys[1]].reps[0].path;
 
 		if(!pathToSo) {
-            throw "Cached cloud file not found in " + pathToSo;
+            throw new Error("Cached cloud file not found in " + pathToSo);
         }
 
 		return pathToSo;
-	}
+	};
 
     /** TODO: coverage for these guys...if possible
 
-        PSString._add("placedLayerConvertToEmbedded");
-        PSString._add("placedLayerConvertToLinked");
-        PSString._add("placedLayerMakeCopy");
+        PSString._add("placedLayerConvertToEmbedded");//DONE
+        PSString._add("placedLayerConvertToLinked");//DONE
+        PSString._add("placedLayerMakeCopy");//DONE
         PSString._add("placedLayerEmbedAll");
         PSString._add("placedLayerExportContents");
-        PSString._add("placedLayerRelinkToFile");
+        PSString._add("placedLayerRelinkToFile");//DONE:set smartobject.link property
         PSString._add("placedLayerRelinkToLibraries");
         PSString._add("placedLayerReplaceContents");
         PSString._add("placedLayerReplaceMissing");
@@ -2030,7 +2574,7 @@
 
     /**
      * Converts the specified layer(s) to a smart object and makes it active.
-     * @param {Number,Array,null} layerId Layer identifier(s), defaults to currently active layer if null or not specified.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
      * @param {Boolean} isLink If true, link instead of embedded smart object.
      * @param {String, File} imageFile Path or File to valid image.
      * @return Chained reference to layer utilities.
@@ -2049,13 +2593,12 @@
 
     /**
      * Creates a "New Smart Object via Copy" for embedded or linked smart objects
-     * @param {Number,null} layerId Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {String, File} imageFile Path or File to valid image.
-     * @param {Boolean} [skipPrompt] If true, and no image file passed in, autocreate new file name.
+     * @param {Number} [layerId=Active layer] Layer identifier.
+     * @param {String} [newName] New name for layer or file.
+     * @param {Boolean} [skipPrompt] If true, and no new name passed in, autocreate new file name.
      * @return Chained reference to layer utilities.
      */
-    layers.smartObjects.makeCopy = function (layerId, imageFile, skipPrompt)
-    {
+    layers.smartObjects.makeCopy = function (layerId, newName, skipPrompt) {
         _ensureSmartObjectIsActive(layerId);
 
         var srcLinkPath =  layers.prop('smartObject.link');
@@ -2066,54 +2609,48 @@
             var searchIdx = srcFile.name.lastIndexOf('.');
 
             var srcLinkExtension = srcFile.name.slice(searchIdx, srcFile.name.length);
-            var srcLinkBaseName = srcFile.name.slice(0,searchIdx);
+            var srcLinkNameNumber;
+            var newLinkFile;
 
-            // try to increment name if numbered
-            var srcLinkNameNumber = srcLinkBaseName.match(/\d*$/)[0];//get numbers off end of basename
-            if(srcLinkNameNumber.length)
-            {
-                srcLinkBaseName = srcLinkBaseName.substr(0,srcLinkBaseName.length-srcLinkNameNumber.length);
-                srcLinkBaseName += Number( Number(srcLinkNameNumber) + 1 ).pad( srcLinkNameNumber.length );
-            }
-            else
-            {
-                srcLinkBaseName += '_02';
-            }
-
-            // New file name... assemble!
-            var newLinkName = srcLinkBaseName+srcLinkExtension;
-
-            // default ask for new file name with autofilled prompt
-            if( !skipPrompt ) {
-                newLinkName = prompt("Enter a name for the new file to be linked...", newLinkName, "New File Name");
-                // sanity check and sanitize
-                if( typeof newLinkName !== "string" ){return;}
-
-                if( newLinkName.search(srcLinkExtension) === -1 )
-                {
-                    newLinkName += srcLinkExtension;
+            if (!newName) {
+                newName = srcFile.name.slice(0,searchIdx);
+                // try to increment name if numbered
+                srcLinkNameNumber = newName.match(/\d*$/)[0];//get numbers off end of basename
+                if(srcLinkNameNumber.length) {
+                    newName = newName.substr(0,newName.length-srcLinkNameNumber.length);
+                    newName += Number( Number(srcLinkNameNumber) + 1 ).pad( srcLinkNameNumber.length );
+                } else {
+                    newName += '_02';
+                }
+                // default ask for new file name with autofilled prompt
+                if( !skipPrompt ) {
+                    newName = prompt("Enter a name for the new file to be linked...", newName, "New File Name");
+                    // sanity check and sanitize
+                    if( typeof newName !== "string" ){return;}
                 }
             }
 
-            newLinkFile = new File (srcFile.parent +"/"+ newLinkName);
-            if( newLinkFile.absoluteURI === srcFile.absoluteURI)
-            {
-                alert ("But... that's the same file... "+newLinkName, "Nooooooo!");
+            // New file name... assemble!
+            newName = newName;
+            if( newName.search(srcLinkExtension) === -1 ) {
+                newName += srcLinkExtension;
+            }
+
+            newLinkFile = new File (srcFile.parent +"/"+ newName);
+            if( newLinkFile.absoluteURI === srcFile.absoluteURI) {
+                alert ("But... that's the same file... "+newName, "Nooooooo!");
                 return;
             }
 
             // Existing file check and overwrite confirmation included in copy()
-            newLinkFile = Lifter.system.files.copy(srcFile, newLinkFile);
+            newLinkFile = Lifter.system.files.copy(srcFile, newLinkFile)[0];
 
             // Verify
             if( typeof newLinkFile === "undefined" ){return;}
-            if( !newLinkFile.exists )
-            {
+            if( !newLinkFile.exists ) {
                 log.error('Error copying file. No file found at destination: '+newLinkFile.name);
                 return;
             }
-
-            var newFilePath = newLinkFile.absoluteURI;
 
             // // ask smart object for "more" info
             var soMoreDesc = layers.prop('smartObjectMore');
@@ -2121,7 +2658,6 @@
             var compAppliedID = soMoreDesc.getInteger(s2id('comp'));
 
             // get SmartObject's inner canvas size
-            // var sizeKeyDesc = getPropByName(soMoreDesc,'Sz  ');
             var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
             var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
             var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
@@ -2140,19 +2676,20 @@
             // $.writeln(soY);
             // $.writeln(soScaleX);
             // $.writeln(soScaleY);
-            layers.smartObjects.place(newLinkFile, true, soX, soY, soScaleX, soScaleY);
+            layers.smartObjects.place(newLinkFile, true, soX, soY, soScaleX*100, soScaleY*100);
 
 
             layers.smartObjects.setComp(null, compAppliedID );
         } else {
             executeAction(s2id('placedLayerMakeCopy'), undefined, _dialogModesNo);
+            if(typeof newName === 'string'){ layers.prop('name', newName); }
         }
         return layers;
     };
 
     /**
      * Opens smart object layer for editing.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer identifier.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.edit = function (layerId)
@@ -2166,15 +2703,14 @@
         Lifter.documents.makeActive(activeDocId);
 
         // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
+        _cache.refresh();
 
         return layers;
     };
 
     /**
      * Place a smart object with for link instead
-     * @param {String, File} imageFile Path or File to valid image.
+     * @param {(String|File)} imageFile Path or File to valid image.
      * @param {Boolean} [isLink] If true, link instead of embedded smart object.
      * @param {Number} [scaleX] Width scale to apply (as percentage SO's internal canvas size).
      * @param {Number} [scaleY] Height scale to apply (percentage SO's internal canvas size).
@@ -2192,13 +2728,14 @@
                 throw new ERROR('User aborted convert to linked object...');
         }
 
-        try
-        {
+        try {
             // Place now, position and scale after.
             var descPlace = new ActionDescriptor();
             var idPrc = c2id( "#Prc" );
             descPlace.putPath( c2id( "null" ), _ensureFile(imageFile) );
             descPlace.putEnumerated( c2id( "FTcs" ), c2id( "QCSt" ), c2id( "Qcsa" ) );
+            descPlace.putUnitDouble( c2id( "Wdth" ), c2id( "#Prc" ), scaleX );
+            descPlace.putUnitDouble( c2id( "Hght" ), c2id( "#Prc" ), scaleY );
 
             if(isLink)
                 descPlace.putBoolean( c2id( "Lnkd" ), true );
@@ -2207,41 +2744,42 @@
 
             var newLinkedLayer = app.activeDocument.activeLayer;
 
-            // ask smart object for "more" info
+            // // ask smart object for "more" info
             var soMoreDesc = layers.prop('smartObjectMore');
-
-            // get SmartObject's inner canvas size
-            var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
-            var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
-            var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
 
             //Get 'nonAffineTransform' for most accurate scale
             var soVertList = soMoreDesc.getList(s2id('nonAffineTransform'));
             var soX = soVertList.getDouble(0);
             var soY = soVertList.getDouble(1);
-            var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
-            var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
 
-            var tgtWidth = (scaleX/100)*soWidthInner;
-            var tgtHeight = (scaleY/100)*soHeightInner;
+            //NOTE: by using the "#Prc" in the place action above we sidestepped
+            // all the resize crap. Only percent not pixels so adjust for dpi before
 
-            // Smart Object scaling is affected by SO internal DPI...
-            var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+            // // get SmartObject's inner canvas size
+            // var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
+            // var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
+            // var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
+            // var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
+            // var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
 
-            var newScaleX = (tgtWidth/soWidthPlaced) / soDPIRatio;
-            var newScaleY = (tgtHeight/soHeightPlaced) / soDPIRatio;
+            // var tgtWidth = (scaleX/100)*soWidthInner;
+            // var tgtHeight = (scaleY/100)*soHeightInner;
 
-            newScaleX *= 100;
-            newScaleY *= 100;
+            // // Smart Object scaling is affected by SO internal DPI...
+            // var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+
+            // var newScaleX = (tgtWidth/soWidthPlaced) / soDPIRatio;
+            // var newScaleY = (tgtHeight/soHeightPlaced) / soDPIRatio;
+
+            // newScaleX *= 100;
+            // newScaleY *= 100;
 
             if( typeof posX == "number" && typeof posY == "number" ) {
                 newLinkedLayer.translate( -( soX - posX ) + " px", -( soY - posY ) + " px" );
             }
 
-            newLinkedLayer.resize(newScaleX,newScaleY, AnchorPosition.TOPLEFT);
-        }
-        catch ( e )
-        {
+            // newLinkedLayer.resize(newScaleX,newScaleY, AnchorPosition.TOPLEFT);
+        } catch ( e ) {
             throw new Error('Can not place new smart object...'+e.message);
         }
 
@@ -2250,8 +2788,8 @@
 
     /**
      * Convert a smart object to smart link
-     * @param {Number,Array,null} layerId Layer identifier(s), defaults to currently active layer if null or not specified.
-     * @param {String, File} imageFile Path or File to valid image.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.convertToLinked = function (layerId, imageFile)
@@ -2269,8 +2807,7 @@
                     throw new ERROR('User aborted convert to linked object...');
             }
 
-            try
-            {
+            try {
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
 
@@ -2279,9 +2816,7 @@
                 desc.putReference( c2id( "null" ), ref );
                 desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
                 executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
-            }
-            catch ( e )
-            {
+            } catch ( e ) {
                 throw new Error('Can not convert to linked object...'+e.message);
             }
         }
@@ -2290,9 +2825,69 @@
     };
 
     /**
+     * Relink existing smart object to a different external file.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.reLinkToFile = function (layerId, imageFile)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop('kind')!==LayerKind.SMARTOBJECT ) {
+            layers.smartObjects.make(layerId, true, imageFile);
+        } else {
+            // should have a single smart object now
+
+            if( !imageFile ) {
+                imageFile = File.openDialog();
+                if(!imageFile)
+                    throw new ERROR('User aborted convert to linked object...');
+            }
+
+            try {
+                var ref = new ActionReference();
+                _getLayerIdRef(layerId, ref);
+
+                var desc = new ActionDescriptor();
+
+                desc.putReference( c2id( "null" ), ref );
+                desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
+                executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
+            } catch ( e ) {
+                throw new Error('Can not convert to linked object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
+     * Embed an existing smart object
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.convertToEmbedded = function (layerId)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop(layerId, 'kind') === LayerKind.SMARTOBJECT && layers.prop(layerId, 'smartObject.link') ) {
+            try {
+                _ensureSmartObjectIsActive(layerId);
+
+                executeAction(s2id('placedLayerConvertToEmbedded'), undefined, _dialogModesNo);
+            } catch ( e ) {
+                throw new Error('Can not convert to embedded object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
      * Sets the layer comp for a Smart Object instance.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {Number} [compID] The unique ID of the layer comp to set instance to.
+     * @param {(Number|null)} layerId Layer identifier, null = active layer.
+     * @param {Number} compID The unique ID of the layer comp to set instance to.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.setComp = function (layerId, compID)
@@ -2314,7 +2909,7 @@
     // convenience tests... mostly just aliases for layers.prop() calls.
     /**
      * Check for user or vector mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if user or vector mask present on layer.
      */
     layers.masks.hasMask = function (layerId)
@@ -2325,7 +2920,7 @@
 
     /**
      * Check for user (pixel) mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if user mask present on layer.
      */
     layers.masks.hasLayerMask = function (layerId)
@@ -2336,7 +2931,7 @@
 
     /**
      * Check for vector mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if vector mask present on layer.
      */
     layers.masks.hasVectorMask = function (layerId)
@@ -2347,7 +2942,7 @@
 
     /**
      * Check for filter mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if filter mask present on layer.
      */
     layers.masks.hasFilterMask = function (layerId)
@@ -2359,7 +2954,7 @@
 
     /**
      * Adds a layer mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addLayerMask = function (layerId)
@@ -2403,7 +2998,7 @@
 
     /**
      * Adds a vector mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addVectorMask = function (layerId)
@@ -2436,7 +3031,8 @@
 
     /**
      * Removes the layer mask from the specified layer, optionally applying it.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [apply] Whether to apply the mask to the layer.
      * @return Chained reference to layer utilities.
      */
@@ -2462,8 +3058,9 @@
     /**
      * Removes the vector mask from the specified layer. "apply" will either apply
      * to the existing layer mask or directly to the layer if no layer mask found.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [apply] Whether to rasterize and apply the mask to the layer.
      * @return Chained reference to layer utilities.
      */
@@ -2516,7 +3113,7 @@
      *
      * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [active] Whether to make the layer mask active or not.
      * @return Chained reference to layer utilities.
      */
@@ -2549,7 +3146,7 @@
      *
      * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [active] Whether to make the vector mask active or inactive.
      * @return Chained reference to layer utilities.
      */
@@ -2592,7 +3189,7 @@
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [makeVisible] Whether to make the layer mask visible.
     * @return Chained reference to layer utilities.
     */
@@ -2624,7 +3221,7 @@
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -2654,7 +3251,7 @@
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -2677,7 +3274,7 @@
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -2698,7 +3295,7 @@
 
     /**
      * Creates a selection from the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.selectLayerMask = function (layerId)
@@ -2720,7 +3317,7 @@
 
     /**
      * Creates a selection from the vector mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.selectVectorMask = function (layerId)
@@ -2745,7 +3342,10 @@
 
     /**
      * Set mask linked state for both layer and vector masks.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setMaskLink = function ()
@@ -2793,7 +3393,10 @@
 
     /**
      * Set mask linked state for layer mask.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setLayerMaskLink = function ()
@@ -2801,14 +3404,17 @@
         _overloadFunction_Number_Bool(arguments, undefined, true);
 
         if(layers.masks.hasLayerMask(arguments[0])) {
-            layers.prop(arguments[0],'layerMaskLinked',arguments[1]);
+            layers.prop(arguments[0], 'layerMaskLinked', arguments[1]);
         }
     };
 
 
     /**
      * Set mask linked state for vector mask
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setVectorMaskLink = function ()
@@ -2824,8 +3430,16 @@
 
 
     /**
-     * Refines the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null.
+     * Refines layer mask of specified layer as per Refine Mask workspace
+     * @method
+     * @param {Number} [layerId=Active layer] Layer id
+     * @param  {Number}  edgeBorderRadius   Edge border radius
+     * @param  {Number}  edgeBorderContrast Edge border contrast
+     * @param  {Number}  edgeSmooth         Edge smoothing
+     * @param  {Number}  edgeFeatherRadius  Edge feather radius
+     * @param  {Number}  edgeChoke          Edge choke
+     * @param  {Bool}    edgeAutoRadius     Edge auto radius enabled
+     * @param  {Boolean} edgeDecontaminate  Edge decontamination enabled
      * @return Chained reference to layer utilities.
      */
     layers.masks.refineLayerMask = function (layerId, edgeBorderRadius, edgeBorderContrast, edgeSmooth, edgeFeatherRadius, edgeChoke, edgeAutoRadius, edgeDecontaminate)
@@ -2859,7 +3473,7 @@
 
     /**
      * Inverts the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id
      * @return Chained reference to layer utilities.
      */
     layers.masks.invertLayerMask = function (layerId)
@@ -2869,6 +3483,294 @@
         layers.masks.makeLayerMaskVisible(layerId, false);
 
         return layers;
+    };
+
+
+    // Shapes
+    /**
+     * Provides methods to work with masks on layer and layer sets.
+     */
+    layers.shapes = {};
+
+    /**
+     * Gets fill color of selected layer
+     * @return {SolidColor} photoshop SolidColor object from the layer fill
+     */
+    layers.shapes.getFillColor = function () {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+        var ref1 = executeActionGet( ref );
+        var list = ref1.getList( c2id( "Adjs" ) );
+        var solidColorLayer = list.getObjectValue( 0 );
+        var color = solidColorLayer.getObjectValue( s2id( "color" ) );
+        var fillColor = new SolidColor();
+        fillColor.rgb.red = color.getDouble( c2id( 'Rd  ' ) );
+        fillColor.rgb.green = color.getDouble( c2id( 'Grn ' ) );
+        fillColor.rgb.blue = color.getDouble( c2id( 'Bl  ' ) );
+        return fillColor;
+    };
+
+    /**
+     * Sets fill color for selected layer
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setFillColor = function (layerId, fillColor) {
+        fillColor = Lifter.colors.toSolidColor(fillColor);
+
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+
+        var descSet = new ActionDescriptor();
+        var descColor = Lifter.colors.toActionDescriptor(fillColor);
+        descSet.putReference( c2id( 'null' ), ref );
+        descSet.putObject( s2id( "to" ), s2id( 'solidColorLayer' ), descColor );
+        executeAction( s2id( "set" ), descSet, DialogModes.NO );
+
+        return layers;
+    };
+
+    /**
+     * Sets stroke color for selected layer
+     * @param {Boolean} bEnabled    flag for enabled or disabling stroke
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String} [sAlignment]    stroke alignment. Valid strings: "Center","Inside","Outside"
+     * @param {Int}     [iWidth]      stroke width in pixels
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setStroke = function shapeSetStroke( bEnabled, fillColor, iWidth, sAlignment ) {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+        try {
+            var descSet = new ActionDescriptor();
+            ref.putEnumerated( s2id( "contentLayer" ), c2id( "Ordn" ), s2id( "targetEnum" ) );
+            descSet.putReference( c2id( "null" ), ref );
+            // style descriptors
+            var descStroke = new ActionDescriptor();
+            var descStrokeStyle = new ActionDescriptor();
+
+            if ( typeof fillColor === 'object' || typeof fillColor === 'string' ) {
+                var descColor = Lifter.colors.toActionDescriptor(fillColor);
+                descStrokeStyle.putObject( s2id( "strokeStyleContent" ), s2id( "solidColorLayer" ), descColor );
+            }
+
+            if( typeof sAlignment !== "undefined" ) {
+               var idstrokeStyleLineAlignment = s2id( "strokeStyleLineAlignment" );
+               descStrokeStyle.putEnumerated( idstrokeStyleLineAlignment, idstrokeStyleLineAlignment, s2id( "strokeStyleAlign"+sAlignment ) );
+            }
+
+            // descStrokeStyle.putInteger( s2id( "strokeStyleVersion" ), 2 );
+            descStrokeStyle.putBoolean( s2id( "strokeEnabled" ), bEnabled );
+
+            if ( typeof iWidth !== "undefined" ) {
+               descStrokeStyle.putUnitDouble( s2id( "strokeStyleLineWidth" ), c2id( "#Pxl" ), iWidth );
+            }
+
+            descStroke.putObject( s2id( "strokeStyle" ), s2id( "strokeStyle" ), descStrokeStyle );
+            descSet.putObject( s2id( "to" ), s2id( "shapeStyle" ), descStroke );
+
+            executeAction( s2id( "set" ), descSet, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); }
+
+        return layers;
+    };
+
+
+    //TODO: this only does points no curves and untested
+    layers.shapes.drawCustomShape =  function shapesDrawCustomShape( aAnchorPositions , color, opacity, name)
+    {
+        var oSubPath;
+        var oPathItem;
+        var aPathPoints = [];
+        var y = aAnchorPositions.length;
+        var i = 0;
+
+        for (i = 0; i < y; i++) {
+            aPathPoints[i] = new PathPointInfo();
+            aPathPoints[i].kind = PointKind.CORNERPOINT;
+            aPathPoints[i].anchor = aAnchorPositions[i];
+            aPathPoints[i].leftDirection = aPathPoints[i].anchor;
+            aPathPoints[i].rightDirection = aPathPoints[i].anchor;
+        }
+
+        oSubPath = new SubPathInfo();
+        oSubPath.closed = true;
+        oSubPath.operation = ShapeOperation.SHAPEADD;
+        oSubPath.entireSubPath = aPathPoints;
+        oPathItem = app.activeDocument.oPathItems.add("tmpPath", [oSubPath]);
+
+        var descUsng = new ActionDescriptor();
+        var descType = new ActionDescriptor();
+        var descClr = new ActionDescriptor();
+        var descRGB = Lifter.colors.toActionDescriptor(color);
+        var refLyr = new ActionReference();
+
+        refLyr.putClass(s2t("contentLayer"));
+        descUsng.putReference(c2t("null"), refLyr);
+
+        descClr.putObject(s2t( "color" ), s2t( "RGBColor" ), descRGB);
+        descType.putObject(c2t("Type"), s2t("solidColorLayer"), descClr);
+        descUsng.putObject(c2t("Usng"), s2t("contentLayer"), descType);
+
+        // Set Name
+        if( typeof name !== undefined && name.constructor.name === "String")
+        {
+            descClr.putString( charIDToTypeID( "Nm  " ), name );
+        }
+
+        // Set Opacity
+        if( typeof opacity !== undefined && typeof opacity !== null)
+        {
+            descClr.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+        }
+
+        executeAction(s2t( "make" ), descUsng, DialogModes.NO);
+
+        oPathItem.remove();
+    };
+
+
+    /**
+     * Draw rectangular or circular shape layer
+     * @param {String}    [shape="Rectangle"]    "Rectangle" or "Ellipse"
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String}    [name] Name of new shape layer.
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawShape =  function shapesDrawShape(shape, x, y, w, h, options)
+    {
+        var shapeCID;
+        var opts = (isDef(options))? options : {};
+        var color = Lifter.colors.toArray(opts.color);
+        var opacity = opts.opacity;
+        var name = opts.name;
+        var corners = opts.corners;
+        if(typeof opts.corners === 'number') {
+            corners = [opts.corners, opts.corners, opts.corners, opts.corners];
+        } else if (opts.corners instanceof Array && opts.corners.length === 1) {
+            corners = [opts.corners[0], opts.corners[0], opts.corners[0], opts.corners[0]];
+        }
+
+        // not sure if more shape options?
+        switch (shape) {
+            case "Ellipse":
+            case "Elps":
+                shapeCID = "Elps";
+                break;
+            case "Rectangle":
+            case "Rctn":
+            default:
+                shapeCID = "Rctn";//default rectangle
+                break;
+        }
+
+        // desc layer
+        var descUsng = new ActionDescriptor();
+            var refContentLayer = new ActionReference();
+            refContentLayer.putClass( s2id( "contentLayer" ) );
+        descUsng.putReference( c2id( "null" ), refContentLayer );
+        var descColorLayer = new ActionDescriptor();
+
+            // color
+            var descColor = Lifter.colors.toActionDescriptor(color);
+            descColorLayer.putObject( c2id( "Type" ), s2id( "solidColorLayer" ), descColor );
+
+            // shape
+            var descShape = new ActionDescriptor();
+                var idPxl = c2id( "#Pxl" );
+                descShape.putInteger( s2id( "unitValueQuadVersion" ), 1 );
+
+                // Transform corners
+                descShape.putUnitDouble( c2id( "Top " ), idPxl, y );
+                descShape.putUnitDouble( c2id( "Left" ), idPxl, x );
+                descShape.putUnitDouble( c2id( "Btom" ), idPxl, y+h );
+                descShape.putUnitDouble( c2id( "Rght" ), idPxl, x+w );
+
+                // Rounded corner values
+                if( typeof corners !== 'undefined' && corners.length === 4) {
+                    descShape.putUnitDouble( s2id( "topLeft" ), idPxl, corners[0] );
+                    descShape.putUnitDouble( s2id( "topRight" ), idPxl, corners[1] );
+                    descShape.putUnitDouble( s2id( "bottomRight" ), idPxl, corners[2] );
+                    descShape.putUnitDouble( s2id( "bottomLeft" ), idPxl, corners[3] );
+                }
+
+            descColorLayer.putObject( c2id( "Shp " ), c2id( shapeCID ), descShape );
+
+            // Set Opacity
+            if( typeof opacity !== 'undefined' && typeof opacity !== null) {
+                descColorLayer.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+            }
+
+        descUsng.putObject( c2id( "Usng" ), s2id( "contentLayer" ), descColorLayer );
+
+        try {
+            executeAction( c2id( "Mk  " ), descUsng, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); return; }
+
+        // Set Name
+        if( isDef(name) && typeof name === "string") {
+            layers.prop('name', name);
+        }
+
+        return layers.prop('layerId');
+    };
+
+    /**
+     * Draw circular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawEllipse = function shapesDrawEllipse(x, y, w, h, opts)
+    {
+        return this.drawShape( "Ellipse", x, y, w, h, opts);
+    };
+
+    /**
+     * Draw rectangular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawRect = function shapesDrawRect(x, y, w, h, opts)
+    {
+        return this.drawShape( "Rectangle", x, y, w, h, opts);
     };
 
 
@@ -2949,6 +3851,9 @@
      * with than ItemIndexes because are unique and does not changed based on whether a background
      * layer is present in the document (see below).
      *
+     * Most functions default a null or undefined value passed to a layer id argument to reference the currently
+     * active layer. It is a huge convenience but also a debugging nightmare. Check your inputs and act accordingly.
+     *
      * Some brief notes about ItemIndexes: they behave differently when the background layer
      * is present in the document:
      *
@@ -2961,5 +3866,5 @@
      * non-background layer is present in the document. This is true for LayerIds too.
      */
     Lifter.layers = layers;
-    log.log("Lifter.layers done...");
+    log.debug("Lifter.layers done...");
 }());
