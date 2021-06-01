@@ -336,6 +336,39 @@ ApplyImageChannel.Blue = new Enumerator('ApplyImageChannel.Blue', c2id('Bl  '));
 // Global utilities
 
 /**
+  * Test if defined and not null
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  if defined and not null
+  */
+var isDef = Lifter.isDef = function isDef(v) {
+    return (typeof v !== 'undefined' && v !== null);
+};
+
+
+/**
+  * Test if variable has .length or keys().length > 0
+  * everything else returns true (empty).
+  * Useful because because jQuery objects can have
+  *  a .length of 0 but still have keys().length
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  false if varibale has length > 0
+  */
+var isEmpty = Lifter.isEmpty = function isEmpty(v) {
+    // do this because jQuery objects can have length 0 on objects with keys
+    var empty = true;
+    if (isDef(v)) {
+        if (isDef(v.length)) {
+            empty = (v.length === 0);
+        } else if (Object.keys(v).length > 0) {
+            empty = false;
+        }
+    }
+    return empty;
+};
+
+/**
 * Store current Ruler Unit settings and set to new unit setting
 * @param {Int} units a Units.<something> value, eg. Units.PIXELS
 */
@@ -351,6 +384,35 @@ var setRuler = Lifter.setRuler = function setRuler (units)
 var resetRuler = Lifter.resetRuler = function resetRuler (units)
 {
     app.preferences.rulerUnits = _rulerUnitCache.pop();
+};
+
+/**
+ * Get a rect (x,y,width,height) from bounds or bounds-like number array
+ *
+ * @param {*} bounds  a bounds object or number array
+ * @returns [Object]  object with x, y, width, height
+ */
+var getRect = Lifter.getRect = function getRect(bounds, unit) {
+    var rect = {};
+    unit = (typeof unit === 'string')? unit : 'px';
+
+    function _getVal(o) {
+        return (o instanceof UnitValue) ? o.as(unit) : o;
+    }
+
+    if(bounds instanceof LayerBounds) {
+        rect.x = bounds.left.as(unit);
+        rect.y = bounds.top.as(unit);
+        rect.width = bounds.right.as(unit) - rect.x;
+        rect.height = bounds.bottom.as(unit) - rect.y;
+    } else {
+        rect.x = _getVal(bounds[0]);
+        rect.y = _getVal(bounds[1]);
+        rect.width = _getVal(bounds[2]) - rect.x;
+        rect.height = _getVal(bounds[3]) - rect.y;
+    }
+
+    return rect;
 };
 
 /**
@@ -481,8 +543,13 @@ function _find(collection, findType, patterns, context)
         {
             var matchPattern = patterns[keys[j]];
             var matchTarget = collection.prop(id, keys[j]);
-            if (patterns[keys[j]] !== collection.prop(id, keys[j]))
-                return false;
+            if(matchPattern instanceof RegExp) {
+                if (matchPattern.test(matchTarget) === false)
+                    return false;
+            } else {
+                if (matchPattern !== matchTarget)
+                    return false;
+            }
         }
 
         found.push(id);
