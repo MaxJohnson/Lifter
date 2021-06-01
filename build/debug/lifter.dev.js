@@ -14,2083 +14,1801 @@
 // Partly for tidiness, but mostly because it explodes and dies on es5 Date object.
 // Inelegant sanity check... is to see if we have an es5 shim or not.
 if(typeof [].map !== "function") {
+    $.strict = false;
 
-/*!
- * https://github.com/es-shims/es5-shim
- * @license es5-shim Copyright 2009-2015 by contributors, MIT License
- * see https://github.com/es-shims/es5-shim/blob/master/LICENSE
+/*
+ * A collection of ES5 shims for polyfiling Exendscript (https://github.com/ExtendScript/extendscript-es5-shim)
  */
 
-// vim: ts=4 sts=4 sw=4 expandtab
-
-// Add semicolon to prevent IIFE from being passed as argument to concatenated code.
-;
-
-// UMD (Universal Module Definition)
-// see https://github.com/umdjs/umd/blob/master/templates/returnExports.js
-(function (root, factory) {
-    'use strict';
-
-    /* global define, exports, module */
-    if (typeof define === 'function' && define.amd) {
-        // AMD. Register as an anonymous module.
-        define(factory);
-    } else if (typeof exports === 'object') {
-        // Node. Does not work with strict CommonJS, but
-        // only CommonJS-like enviroments that support module.exports,
-        // like Node.
-        module.exports = factory();
-    } else {
-        // Browser globals (root is window)
-        root.returnExports = factory();
-    }
-}(this, function () {
-    /**
-     * Brings an environment as close to ECMAScript 5 compliance
-     * as is possible with the facilities of erstwhile engines.
-     *
-     * Annotated ES5: http://es5.github.com/ (specific links below)
-     * ES5 Spec: http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-262.pdf
-     * Required reading: http://javascriptweblog.wordpress.com/2011/12/05/extending-javascript-natives/
-     */
-
-    // Shortcut to an often accessed properties, in order to avoid multiple
-    // dereference that costs universally. This also holds a reference to known-good
-    // functions.
-    var $Array = Array;
-    var ArrayPrototype = $Array.prototype;
-    var $Object = Object;
-    var ObjectPrototype = $Object.prototype;
-    var $Function = Function;
-    var FunctionPrototype = $Function.prototype;
-    var $String = String;
-    var StringPrototype = $String.prototype;
-    var $Number = Number;
-    var NumberPrototype = $Number.prototype;
-    var array_slice = ArrayPrototype.slice;
-    var array_splice = ArrayPrototype.splice;
-    var array_push = ArrayPrototype.push;
-    var array_unshift = ArrayPrototype.unshift;
-    var array_concat = ArrayPrototype.concat;
-    var array_join = ArrayPrototype.join;
-    var call = FunctionPrototype.call;
-    var apply = FunctionPrototype.apply;
-    var max = Math.max;
-    var min = Math.min;
-
-    // Having a toString local variable name breaks in Opera so use to_string.
-    var to_string = ObjectPrototype.toString;
-
-    /* global Symbol */
-    /* eslint-disable one-var-declaration-per-line, no-redeclare, max-statements-per-line */
-    var hasToStringTag = typeof Symbol === 'function' && typeof Symbol.toStringTag === 'symbol';
-    var isCallable; /* inlined from https://npmjs.com/is-callable */ var fnToStr = Function.prototype.toString, constructorRegex = /^\s*class /, isES6ClassFn = function isES6ClassFn(value) { try { var fnStr = fnToStr.call(value); var singleStripped = fnStr.replace(/\/\/.*\n/g, ''); var multiStripped = singleStripped.replace(/\/\*[.\s\S]*\*\//g, ''); var spaceStripped = multiStripped.replace(/\n/mg, ' ').replace(/ {2}/g, ' '); return constructorRegex.test(spaceStripped); } catch (e) { return false; /* not a function */ } }, tryFunctionObject = function tryFunctionObject(value) { try { if (isES6ClassFn(value)) { return false; } fnToStr.call(value); return true; } catch (e) { return false; } }, fnClass = '[object Function]', genClass = '[object GeneratorFunction]', isCallable = function isCallable(value) { if (!value) { return false; } if (typeof value !== 'function' && typeof value !== 'object') { return false; } if (hasToStringTag) { return tryFunctionObject(value); } if (isES6ClassFn(value)) { return false; } var strClass = to_string.call(value); return strClass === fnClass || strClass === genClass; };
-
-    var isRegex; /* inlined from https://npmjs.com/is-regex */ var regexExec = RegExp.prototype.exec, tryRegexExec = function tryRegexExec(value) { try { regexExec.call(value); return true; } catch (e) { return false; } }, regexClass = '[object RegExp]'; isRegex = function isRegex(value) { if (typeof value !== 'object') { return false; } return hasToStringTag ? tryRegexExec(value) : to_string.call(value) === regexClass; };
-    var isString; /* inlined from https://npmjs.com/is-string */ var strValue = String.prototype.valueOf, tryStringObject = function tryStringObject(value) { try { strValue.call(value); return true; } catch (e) { return false; } }, stringClass = '[object String]'; isString = function isString(value) { if (typeof value === 'string') { return true; } if (typeof value !== 'object') { return false; } return hasToStringTag ? tryStringObject(value) : to_string.call(value) === stringClass; };
-    /* eslint-enable one-var-declaration-per-line, no-redeclare, max-statements-per-line */
-
-    /* inlined from http://npmjs.com/define-properties */
-    var supportsDescriptors = $Object.defineProperty && (function () {
-        try {
-            var obj = {};
-            $Object.defineProperty(obj, 'x', { enumerable: false, value: obj });
-            for (var _ in obj) { // jscs:ignore disallowUnusedVariables
-                return false;
-            }
-            return obj.x === obj;
-        } catch (e) { /* this is ES3 */
-            return false;
-        }
-    }());
-    var defineProperties = (function (has) {
-        // Define configurable, writable, and non-enumerable props
-        // if they don't exist.
-        var defineProperty;
-        if (supportsDescriptors) {
-            defineProperty = function (object, name, method, forceAssign) {
-                if (!forceAssign && (name in object)) {
-                    return;
-                }
-                $Object.defineProperty(object, name, {
-                    configurable: true,
-                    enumerable: false,
-                    writable: true,
-                    value: method
-                });
-            };
-        } else {
-            defineProperty = function (object, name, method, forceAssign) {
-                if (!forceAssign && (name in object)) {
-                    return;
-                }
-                object[name] = method;
-            };
-        }
-        return function defineProperties(object, map, forceAssign) {
-            for (var name in map) {
-                if (has.call(map, name)) {
-                    defineProperty(object, name, map[name], forceAssign);
-                }
-            }
-        };
-    }(ObjectPrototype.hasOwnProperty));
-
-    //
-    // Util
-    // ======
-    //
-
-    /* replaceable with https://npmjs.com/package/es-abstract /helpers/isPrimitive */
-    var isPrimitive = function isPrimitive(input) {
-        var type = typeof input;
-        return input === null || (type !== 'object' && type !== 'function');
-    };
-
-    var isActualNaN = $Number.isNaN || function isActualNaN(x) {
-        return x !== x;
-    };
-
-    var ES = {
-        // ES5 9.4
-        // http://es5.github.com/#x9.4
-        // http://jsperf.com/to-integer
-        /* replaceable with https://npmjs.com/package/es-abstract ES5.ToInteger */
-        ToInteger: function ToInteger(num) {
-            var n = +num;
-            if (isActualNaN(n)) {
-                n = 0;
-            } else if (n !== 0 && n !== (1 / 0) && n !== -(1 / 0)) {
-                n = (n > 0 || -1) * Math.floor(Math.abs(n));
-            }
-            return n;
-        },
-
-        /* replaceable with https://npmjs.com/package/es-abstract ES5.ToPrimitive */
-        ToPrimitive: function ToPrimitive(input) {
-            var val, valueOf, toStr;
-            if (isPrimitive(input)) {
-                return input;
-            }
-            valueOf = input.valueOf;
-            if (isCallable(valueOf)) {
-                val = valueOf.call(input);
-                if (isPrimitive(val)) {
-                    return val;
-                }
-            }
-            toStr = input.toString;
-            if (isCallable(toStr)) {
-                val = toStr.call(input);
-                if (isPrimitive(val)) {
-                    return val;
-                }
-            }
-            throw new TypeError();
-        },
-
-        // ES5 9.9
-        // http://es5.github.com/#x9.9
-        /* replaceable with https://npmjs.com/package/es-abstract ES5.ToObject */
-        ToObject: function (o) {
-            if (o == null) { // this matches both null and undefined
-                throw new TypeError("can't convert " + o + ' to object');
-            }
-            return $Object(o);
-        },
-
-        /* replaceable with https://npmjs.com/package/es-abstract ES5.ToUint32 */
-        ToUint32: function ToUint32(x) {
-            return x >>> 0;
-        }
-    };
-
-    //
-    // Function
-    // ========
-    //
-
-    // ES-5 15.3.4.5
-    // http://es5.github.com/#x15.3.4.5
-
-    var Empty = function Empty() {};
-
-    defineProperties(FunctionPrototype, {
-        bind: function bind(that) { // .length is 1
-            // 1. Let Target be the this value.
-            var target = this;
-            // 2. If IsCallable(Target) is false, throw a TypeError exception.
-            if (!isCallable(target)) {
-                throw new TypeError('Function.prototype.bind called on incompatible ' + target);
-            }
-            // 3. Let A be a new (possibly empty) internal list of all of the
-            //   argument values provided after thisArg (arg1, arg2 etc), in order.
-            // XXX slicedArgs will stand in for "A" if used
-            var args = array_slice.call(arguments, 1); // for normal call
-            // 4. Let F be a new native ECMAScript object.
-            // 11. Set the [[Prototype]] internal property of F to the standard
-            //   built-in Function prototype object as specified in 15.3.3.1.
-            // 12. Set the [[Call]] internal property of F as described in
-            //   15.3.4.5.1.
-            // 13. Set the [[Construct]] internal property of F as described in
-            //   15.3.4.5.2.
-            // 14. Set the [[HasInstance]] internal property of F as described in
-            //   15.3.4.5.3.
-            var bound;
-            var binder = function () {
-
-                if (this instanceof bound) {
-                    // 15.3.4.5.2 [[Construct]]
-                    // When the [[Construct]] internal method of a function object,
-                    // F that was created using the bind function is called with a
-                    // list of arguments ExtraArgs, the following steps are taken:
-                    // 1. Let target be the value of F's [[TargetFunction]]
-                    //   internal property.
-                    // 2. If target has no [[Construct]] internal method, a
-                    //   TypeError exception is thrown.
-                    // 3. Let boundArgs be the value of F's [[BoundArgs]] internal
-                    //   property.
-                    // 4. Let args be a new list containing the same values as the
-                    //   list boundArgs in the same order followed by the same
-                    //   values as the list ExtraArgs in the same order.
-                    // 5. Return the result of calling the [[Construct]] internal
-                    //   method of target providing args as the arguments.
-
-                    var result = apply.call(
-                        target,
-                        this,
-                        array_concat.call(args, array_slice.call(arguments))
-                    );
-                    if ($Object(result) === result) {
-                        return result;
-                    }
-                    return this;
-
-                } else {
-                    // 15.3.4.5.1 [[Call]]
-                    // When the [[Call]] internal method of a function object, F,
-                    // which was created using the bind function is called with a
-                    // this value and a list of arguments ExtraArgs, the following
-                    // steps are taken:
-                    // 1. Let boundArgs be the value of F's [[BoundArgs]] internal
-                    //   property.
-                    // 2. Let boundThis be the value of F's [[BoundThis]] internal
-                    //   property.
-                    // 3. Let target be the value of F's [[TargetFunction]] internal
-                    //   property.
-                    // 4. Let args be a new list containing the same values as the
-                    //   list boundArgs in the same order followed by the same
-                    //   values as the list ExtraArgs in the same order.
-                    // 5. Return the result of calling the [[Call]] internal method
-                    //   of target providing boundThis as the this value and
-                    //   providing args as the arguments.
-
-                    // equiv: target.call(this, ...boundArgs, ...args)
-                    return apply.call(
-                        target,
-                        that,
-                        array_concat.call(args, array_slice.call(arguments))
-                    );
-
-                }
-
-            };
-
-            // 15. If the [[Class]] internal property of Target is "Function", then
-            //     a. Let L be the length property of Target minus the length of A.
-            //     b. Set the length own property of F to either 0 or L, whichever is
-            //       larger.
-            // 16. Else set the length own property of F to 0.
-
-            var boundLength = max(0, target.length - args.length);
-
-            // 17. Set the attributes of the length own property of F to the values
-            //   specified in 15.3.5.1.
-            var boundArgs = [];
-            for (var i = 0; i < boundLength; i++) {
-                array_push.call(boundArgs, '$' + i);
-            }
-
-            // XXX Build a dynamic function with desired amount of arguments is the only
-            // way to set the length property of a function.
-            // In environments where Content Security Policies enabled (Chrome extensions,
-            // for ex.) all use of eval or Function costructor throws an exception.
-            // However in all of these environments Function.prototype.bind exists
-            // and so this code will never be executed.
-            bound = $Function('binder', 'return function (' + array_join.call(boundArgs, ',') + '){ return binder.apply(this, arguments); }')(binder);
-
-            if (target.prototype) {
-                Empty.prototype = target.prototype;
-                bound.prototype = new Empty();
-                // Clean up dangling references.
-                Empty.prototype = null;
-            }
-
-            // TODO
-            // 18. Set the [[Extensible]] internal property of F to true.
-
-            // TODO
-            // 19. Let thrower be the [[ThrowTypeError]] function Object (13.2.3).
-            // 20. Call the [[DefineOwnProperty]] internal method of F with
-            //   arguments "caller", PropertyDescriptor {[[Get]]: thrower, [[Set]]:
-            //   thrower, [[Enumerable]]: false, [[Configurable]]: false}, and
-            //   false.
-            // 21. Call the [[DefineOwnProperty]] internal method of F with
-            //   arguments "arguments", PropertyDescriptor {[[Get]]: thrower,
-            //   [[Set]]: thrower, [[Enumerable]]: false, [[Configurable]]: false},
-            //   and false.
-
-            // TODO
-            // NOTE Function objects created using Function.prototype.bind do not
-            // have a prototype property or the [[Code]], [[FormalParameters]], and
-            // [[Scope]] internal properties.
-            // XXX can't delete prototype in pure-js.
-
-            // 22. Return F.
-            return bound;
-        }
-    });
-
-    // _Please note: Shortcuts are defined after `Function.prototype.bind` as we
-    // use it in defining shortcuts.
-    var owns = call.bind(ObjectPrototype.hasOwnProperty);
-    var toStr = call.bind(ObjectPrototype.toString);
-    var arraySlice = call.bind(array_slice);
-    var arraySliceApply = apply.bind(array_slice);
-    var strSlice = call.bind(StringPrototype.slice);
-    var strSplit = call.bind(StringPrototype.split);
-    var strIndexOf = call.bind(StringPrototype.indexOf);
-    var pushCall = call.bind(array_push);
-    var isEnum = call.bind(ObjectPrototype.propertyIsEnumerable);
-    var arraySort = call.bind(ArrayPrototype.sort);
-
-    //
-    // Array
-    // =====
-    //
-
-    var isArray = $Array.isArray || function isArray(obj) {
-        return toStr(obj) === '[object Array]';
-    };
-
-    // ES5 15.4.4.12
-    // http://es5.github.com/#x15.4.4.13
-    // Return len+argCount.
-    // [bugfix, ielt8]
-    // IE < 8 bug: [].unshift(0) === undefined but should be "1"
-    var hasUnshiftReturnValueBug = [].unshift(0) !== 1;
-    defineProperties(ArrayPrototype, {
-        unshift: function () {
-            array_unshift.apply(this, arguments);
-            return this.length;
-        }
-    }, hasUnshiftReturnValueBug);
-
-    // ES5 15.4.3.2
-    // http://es5.github.com/#x15.4.3.2
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
-    defineProperties($Array, { isArray: isArray });
-
-    // The IsCallable() check in the Array functions
-    // has been replaced with a strict check on the
-    // internal class of the object to trap cases where
-    // the provided function was actually a regular
-    // expression literal, which in V8 and
-    // JavaScriptCore is a typeof "function".  Only in
-    // V8 are regular expression literals permitted as
-    // reduce parameters, so it is desirable in the
-    // general case for the shim to match the more
-    // strict and common behavior of rejecting regular
-    // expressions.
-
-    // ES5 15.4.4.18
-    // http://es5.github.com/#x15.4.4.18
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/array/forEach
-
-    // Check failure of by-index access of string characters (IE < 9)
-    // and failure of `0 in boxedString` (Rhino)
-    var boxedString = $Object('a');
-    var splitString = boxedString[0] !== 'a' || !(0 in boxedString);
-
-    var properlyBoxesContext = function properlyBoxed(method) {
-        // Check node 0.6.21 bug where third parameter is not boxed
-        var properlyBoxesNonStrict = true;
-        var properlyBoxesStrict = true;
-        var threwException = false;
-        if (method) {
-            try {
-                method.call('foo', function (_, __, context) {
-                    if (typeof context !== 'object') {
-                        properlyBoxesNonStrict = false;
-                    }
-                });
-
-                method.call([1], function () {
-                    'use strict';
-
-                    properlyBoxesStrict = typeof this === 'string';
-                }, 'x');
-            } catch (e) {
-                threwException = true;
-            }
-        }
-        return !!method && !threwException && properlyBoxesNonStrict && properlyBoxesStrict;
-    };
-
-    defineProperties(ArrayPrototype, {
-        forEach: function forEach(callbackfn/*, thisArg*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var i = -1;
-            var length = ES.ToUint32(self.length);
-            var T;
-            if (arguments.length > 1) {
-                T = arguments[1];
-            }
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.forEach callback must be a function');
-            }
-
-            while (++i < length) {
-                if (i in self) {
-                    // Invoke the callback function with call, passing arguments:
-                    // context, property value, property key, thisArg object
-                    if (typeof T === 'undefined') {
-                        callbackfn(self[i], i, object);
-                    } else {
-                        callbackfn.call(T, self[i], i, object);
-                    }
-                }
-            }
-        }
-    }, !properlyBoxesContext(ArrayPrototype.forEach));
-
-    // ES5 15.4.4.19
-    // http://es5.github.com/#x15.4.4.19
-    // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Objects/Array/map
-    defineProperties(ArrayPrototype, {
-        map: function map(callbackfn/*, thisArg*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-            var result = $Array(length);
-            var T;
-            if (arguments.length > 1) {
-                T = arguments[1];
-            }
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.map callback must be a function');
-            }
-
-            for (var i = 0; i < length; i++) {
-                if (i in self) {
-                    if (typeof T === 'undefined') {
-                        result[i] = callbackfn(self[i], i, object);
-                    } else {
-                        result[i] = callbackfn.call(T, self[i], i, object);
-                    }
-                }
-            }
-            return result;
-        }
-    }, !properlyBoxesContext(ArrayPrototype.map));
-
-    // ES5 15.4.4.20
-    // http://es5.github.com/#x15.4.4.20
-    // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Objects/Array/filter
-    defineProperties(ArrayPrototype, {
-        filter: function filter(callbackfn/*, thisArg*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-            var result = [];
-            var value;
-            var T;
-            if (arguments.length > 1) {
-                T = arguments[1];
-            }
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.filter callback must be a function');
-            }
-
-            for (var i = 0; i < length; i++) {
-                if (i in self) {
-                    value = self[i];
-                    if (typeof T === 'undefined' ? callbackfn(value, i, object) : callbackfn.call(T, value, i, object)) {
-                        pushCall(result, value);
-                    }
-                }
-            }
-            return result;
-        }
-    }, !properlyBoxesContext(ArrayPrototype.filter));
-
-    // ES5 15.4.4.16
-    // http://es5.github.com/#x15.4.4.16
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/every
-    defineProperties(ArrayPrototype, {
-        every: function every(callbackfn/*, thisArg*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-            var T;
-            if (arguments.length > 1) {
-                T = arguments[1];
-            }
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.every callback must be a function');
-            }
-
-            for (var i = 0; i < length; i++) {
-                if (i in self && !(typeof T === 'undefined' ? callbackfn(self[i], i, object) : callbackfn.call(T, self[i], i, object))) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }, !properlyBoxesContext(ArrayPrototype.every));
-
-    // ES5 15.4.4.17
-    // http://es5.github.com/#x15.4.4.17
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/some
-    defineProperties(ArrayPrototype, {
-        some: function some(callbackfn/*, thisArg */) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-            var T;
-            if (arguments.length > 1) {
-                T = arguments[1];
-            }
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.some callback must be a function');
-            }
-
-            for (var i = 0; i < length; i++) {
-                if (i in self && (typeof T === 'undefined' ? callbackfn(self[i], i, object) : callbackfn.call(T, self[i], i, object))) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }, !properlyBoxesContext(ArrayPrototype.some));
-
-    // ES5 15.4.4.21
-    // http://es5.github.com/#x15.4.4.21
-    // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Objects/Array/reduce
-    var reduceCoercesToObject = false;
-    if (ArrayPrototype.reduce) {
-        reduceCoercesToObject = typeof ArrayPrototype.reduce.call('es5', function (_, __, ___, list) {
-            return list;
-        }) === 'object';
-    }
-    defineProperties(ArrayPrototype, {
-        reduce: function reduce(callbackfn/*, initialValue*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.reduce callback must be a function');
-            }
-
-            // no value to return if no initial value and an empty array
-            if (length === 0 && arguments.length === 1) {
-                throw new TypeError('reduce of empty array with no initial value');
-            }
-
-            var i = 0;
-            var result;
-            if (arguments.length >= 2) {
-                result = arguments[1];
-            } else {
-                do {
-                    if (i in self) {
-                        result = self[i++];
-                        break;
-                    }
-
-                    // if array contains no values, no initial value to return
-                    if (++i >= length) {
-                        throw new TypeError('reduce of empty array with no initial value');
-                    }
-                } while (true);
-            }
-
-            for (; i < length; i++) {
-                if (i in self) {
-                    result = callbackfn(result, self[i], i, object);
-                }
-            }
-
-            return result;
-        }
-    }, !reduceCoercesToObject);
-
-    // ES5 15.4.4.22
-    // http://es5.github.com/#x15.4.4.22
-    // https://developer.mozilla.org/en/Core_JavaScript_1.5_Reference/Objects/Array/reduceRight
-    var reduceRightCoercesToObject = false;
-    if (ArrayPrototype.reduceRight) {
-        reduceRightCoercesToObject = typeof ArrayPrototype.reduceRight.call('es5', function (_, __, ___, list) {
-            return list;
-        }) === 'object';
-    }
-    defineProperties(ArrayPrototype, {
-        reduceRight: function reduceRight(callbackfn/*, initial*/) {
-            var object = ES.ToObject(this);
-            var self = splitString && isString(this) ? strSplit(this, '') : object;
-            var length = ES.ToUint32(self.length);
-
-            // If no callback function or if callback is not a callable function
-            if (!isCallable(callbackfn)) {
-                throw new TypeError('Array.prototype.reduceRight callback must be a function');
-            }
-
-            // no value to return if no initial value, empty array
-            if (length === 0 && arguments.length === 1) {
-                throw new TypeError('reduceRight of empty array with no initial value');
-            }
-
-            var result;
-            var i = length - 1;
-            if (arguments.length >= 2) {
-                result = arguments[1];
-            } else {
-                do {
-                    if (i in self) {
-                        result = self[i--];
-                        break;
-                    }
-
-                    // if array contains no values, no initial value to return
-                    if (--i < 0) {
-                        throw new TypeError('reduceRight of empty array with no initial value');
-                    }
-                } while (true);
-            }
-
-            if (i < 0) {
-                return result;
-            }
-
-            do {
-                if (i in self) {
-                    result = callbackfn(result, self[i], i, object);
-                }
-            } while (i--);
-
-            return result;
-        }
-    }, !reduceRightCoercesToObject);
-
-    // ES5 15.4.4.14
-    // http://es5.github.com/#x15.4.4.14
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/indexOf
-    var hasFirefox2IndexOfBug = ArrayPrototype.indexOf && [0, 1].indexOf(1, 2) !== -1;
-    defineProperties(ArrayPrototype, {
-        indexOf: function indexOf(searchElement/*, fromIndex */) {
-            var self = splitString && isString(this) ? strSplit(this, '') : ES.ToObject(this);
-            var length = ES.ToUint32(self.length);
-
-            if (length === 0) {
-                return -1;
-            }
-
-            var i = 0;
-            if (arguments.length > 1) {
-                i = ES.ToInteger(arguments[1]);
-            }
-
-            // handle negative indices
-            i = i >= 0 ? i : max(0, length + i);
-            for (; i < length; i++) {
-                if (i in self && self[i] === searchElement) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-    }, hasFirefox2IndexOfBug);
-
-    // ES5 15.4.4.15
-    // http://es5.github.com/#x15.4.4.15
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/lastIndexOf
-    var hasFirefox2LastIndexOfBug = ArrayPrototype.lastIndexOf && [0, 1].lastIndexOf(0, -3) !== -1;
-    defineProperties(ArrayPrototype, {
-        lastIndexOf: function lastIndexOf(searchElement/*, fromIndex */) {
-            var self = splitString && isString(this) ? strSplit(this, '') : ES.ToObject(this);
-            var length = ES.ToUint32(self.length);
-
-            if (length === 0) {
-                return -1;
-            }
-            var i = length - 1;
-            if (arguments.length > 1) {
-                i = min(i, ES.ToInteger(arguments[1]));
-            }
-            // handle negative indices
-            i = i >= 0 ? i : length - Math.abs(i);
-            for (; i >= 0; i--) {
-                if (i in self && searchElement === self[i]) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-    }, hasFirefox2LastIndexOfBug);
-
-    // ES5 15.4.4.12
-    // http://es5.github.com/#x15.4.4.12
-    var spliceNoopReturnsEmptyArray = (function () {
-        var a = [1, 2];
-        var result = a.splice();
-        return a.length === 2 && isArray(result) && result.length === 0;
-    }());
-    defineProperties(ArrayPrototype, {
-        // Safari 5.0 bug where .splice() returns undefined
-        splice: function splice(start, deleteCount) {
-            if (arguments.length === 0) {
-                return [];
-            } else {
-                return array_splice.apply(this, arguments);
-            }
-        }
-    }, !spliceNoopReturnsEmptyArray);
-
-    var spliceWorksWithEmptyObject = (function () {
-        var obj = {};
-        ArrayPrototype.splice.call(obj, 0, 0, 1);
-        return obj.length === 1;
-    }());
-    defineProperties(ArrayPrototype, {
-        splice: function splice(start, deleteCount) {
-            if (arguments.length === 0) {
-                return [];
-            }
-            var args = arguments;
-            this.length = max(ES.ToInteger(this.length), 0);
-            if (arguments.length > 0 && typeof deleteCount !== 'number') {
-                args = arraySlice(arguments);
-                if (args.length < 2) {
-                    pushCall(args, this.length - start);
-                } else {
-                    args[1] = ES.ToInteger(deleteCount);
-                }
-            }
-            return array_splice.apply(this, args);
-        }
-    }, !spliceWorksWithEmptyObject);
-    var spliceWorksWithLargeSparseArrays = (function () {
-        // Per https://github.com/es-shims/es5-shim/issues/295
-        // Safari 7/8 breaks with sparse arrays of size 1e5 or greater
-        var arr = new $Array(1e5);
-        // note: the index MUST be 8 or larger or the test will false pass
-        arr[8] = 'x';
-        arr.splice(1, 1);
-        // note: this test must be defined *after* the indexOf shim
-        // per https://github.com/es-shims/es5-shim/issues/313
-        return arr.indexOf('x') === 7;
-    }());
-    var spliceWorksWithSmallSparseArrays = (function () {
-        // Per https://github.com/es-shims/es5-shim/issues/295
-        // Opera 12.15 breaks on this, no idea why.
-        var n = 256;
-        var arr = [];
-        arr[n] = 'a';
-        arr.splice(n + 1, 0, 'b');
-        return arr[n] === 'a';
-    }());
-    defineProperties(ArrayPrototype, {
-        splice: function splice(start, deleteCount) {
-            var O = ES.ToObject(this);
-            var A = [];
-            var len = ES.ToUint32(O.length);
-            var relativeStart = ES.ToInteger(start);
-            var actualStart = relativeStart < 0 ? max((len + relativeStart), 0) : min(relativeStart, len);
-            var actualDeleteCount = min(max(ES.ToInteger(deleteCount), 0), len - actualStart);
-
-            var k = 0;
-            var from;
-            while (k < actualDeleteCount) {
-                from = $String(actualStart + k);
-                if (owns(O, from)) {
-                    A[k] = O[from];
-                }
-                k += 1;
-            }
-
-            var items = arraySlice(arguments, 2);
-            var itemCount = items.length;
-            var to;
-            if (itemCount < actualDeleteCount) {
-                k = actualStart;
-                var maxK = len - actualDeleteCount;
-                while (k < maxK) {
-                    from = $String(k + actualDeleteCount);
-                    to = $String(k + itemCount);
-                    if (owns(O, from)) {
-                        O[to] = O[from];
-                    } else {
-                        delete O[to];
-                    }
-                    k += 1;
-                }
-                k = len;
-                var minK = len - actualDeleteCount + itemCount;
-                while (k > minK) {
-                    delete O[k - 1];
-                    k -= 1;
-                }
-            } else if (itemCount > actualDeleteCount) {
-                k = len - actualDeleteCount;
-                while (k > actualStart) {
-                    from = $String(k + actualDeleteCount - 1);
-                    to = $String(k + itemCount - 1);
-                    if (owns(O, from)) {
-                        O[to] = O[from];
-                    } else {
-                        delete O[to];
-                    }
-                    k -= 1;
-                }
-            }
-            k = actualStart;
-            for (var i = 0; i < items.length; ++i) {
-                O[k] = items[i];
-                k += 1;
-            }
-            O.length = len - actualDeleteCount + itemCount;
-
-            return A;
-        }
-    }, !spliceWorksWithLargeSparseArrays || !spliceWorksWithSmallSparseArrays);
-
-    var originalJoin = ArrayPrototype.join;
-    var hasStringJoinBug;
-    try {
-        hasStringJoinBug = Array.prototype.join.call('123', ',') !== '1,2,3';
-    } catch (e) {
-        hasStringJoinBug = true;
-    }
-    if (hasStringJoinBug) {
-        defineProperties(ArrayPrototype, {
-            join: function join(separator) {
-                var sep = typeof separator === 'undefined' ? ',' : separator;
-                return originalJoin.call(isString(this) ? strSplit(this, '') : this, sep);
-            }
-        }, hasStringJoinBug);
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.17
+// Reference: http://es5.github.io/#x15.4.4.17
+if (!Array.prototype.some) {
+  Array.prototype.some = function(callback, thisArg) {
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.some called on null or undefined');
     }
 
-    var hasJoinUndefinedBug = [1, 2].join(undefined) !== '1,2';
-    if (hasJoinUndefinedBug) {
-        defineProperties(ArrayPrototype, {
-            join: function join(separator) {
-                var sep = typeof separator === 'undefined' ? ',' : separator;
-                return originalJoin.call(this, sep);
-            }
-        }, hasJoinUndefinedBug);
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
     }
 
-    var pushShim = function push(item) {
-        var O = ES.ToObject(this);
-        var n = ES.ToUint32(O.length);
-        var i = 0;
-        while (i < arguments.length) {
-            O[n + i] = arguments[i];
-            i += 1;
-        }
-        O.length = n + i;
-        return n + i;
-    };
+    var t = Object(this);
+    var len = t.length >>> 0;
 
-    var pushIsNotGeneric = (function () {
-        var obj = {};
-        var result = Array.prototype.push.call(obj, undefined);
-        return result !== 1 || obj.length !== 1 || typeof obj[0] !== 'undefined' || !owns(obj, 0);
-    }());
-    defineProperties(ArrayPrototype, {
-        push: function push(item) {
-            if (isArray(this)) {
-                return array_push.apply(this, arguments);
-            }
-            return pushShim.apply(this, arguments);
-        }
-    }, pushIsNotGeneric);
-
-    // This fixes a very weird bug in Opera 10.6 when pushing `undefined
-    var pushUndefinedIsWeird = (function () {
-        var arr = [];
-        var result = arr.push(undefined);
-        return result !== 1 || arr.length !== 1 || typeof arr[0] !== 'undefined' || !owns(arr, 0);
-    }());
-    defineProperties(ArrayPrototype, { push: pushShim }, pushUndefinedIsWeird);
-
-    // ES5 15.2.3.14
-    // http://es5.github.io/#x15.4.4.10
-    // Fix boxed string bug
-    defineProperties(ArrayPrototype, {
-        slice: function (start, end) {
-            var arr = isString(this) ? strSplit(this, '') : this;
-            return arraySliceApply(arr, arguments);
-        }
-    }, splitString);
-
-    var sortIgnoresNonFunctions = (function () {
-        try {
-            [1, 2].sort(null);
-            [1, 2].sort({});
-            return true;
-        } catch (e) {}
-        return false;
-    }());
-    var sortThrowsOnRegex = (function () {
-        // this is a problem in Firefox 4, in which `typeof /a/ === 'function'`
-        try {
-            [1, 2].sort(/a/);
-            return false;
-        } catch (e) {}
+    var T = arguments.length > 1 ? thisArg : void 0;
+    for (var i = 0; i < len; i++) {
+      if (i in t && callback.call(T, t[i], i, t)) {
         return true;
-    }());
-    var sortIgnoresUndefined = (function () {
-        // applies in IE 8, for one.
-        try {
-            [1, 2].sort(undefined);
-            return true;
-        } catch (e) {}
+      }
+    }
+
+    return false;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/every
+*/
+if (!Array.prototype.every) {
+  Array.prototype.every = function(callback, thisArg) {
+    var T, k;
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.every called on null or undefined');
+    }
+
+    // 1. Let O be the result of calling ToObject passing the this
+    //    value as the argument.
+    var O = Object(this);
+
+    // 2. Let lenValue be the result of calling the Get internal method
+    //    of O with the argument "length".
+    // 3. Let len be ToUint32(lenValue).
+    var len = O.length >>> 0;
+
+    // 4. If IsCallable(callback) is false, throw a TypeError exception.
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    // 5. If thisArg was supplied, let T be thisArg; else let T be undefined.
+    T = (arguments.length > 1) ? thisArg : void 0;
+
+    // 6. Let k be 0.
+    k = 0;
+
+    // 7. Repeat, while k < len
+    while (k < len) {
+
+      var kValue;
+
+      // a. Let Pk be ToString(k).
+      //   This is implicit for LHS operands of the in operator
+      // b. Let kPresent be the result of calling the HasProperty internal
+      //    method of O with argument Pk.
+      //   This step can be combined with c
+      // c. If kPresent is true, then
+      if (k in O) {
+
+        // i. Let kValue be the result of calling the Get internal method
+        //    of O with argument Pk.
+        kValue = O[k];
+
+        // ii. Let testResult be the result of calling the Call internal method
+        //     of callback with T as the this value and argument list
+        //     containing kValue, k, and O.
+        var testResult = callback.call(T, kValue, k, O);
+
+        // iii. If ToBoolean(testResult) is false, return false.
+        if (!testResult) {
+          return false;
+        }
+      }
+      k++;
+    }
+    return true;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter
+*/
+if (!Array.prototype.filter) {
+  Array.prototype.filter = function(callback, thisArg) {
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.filter called on null or undefined');
+    }
+
+    var t = Object(this);
+    var len = t.length >>> 0;
+
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    var res = [];
+
+    var T = (arguments.length > 1) ? thisArg : void 0;
+
+    for (var i = 0; i < len; i++) {
+      if (i in t) {
+        var val = t[i];
+
+        // NOTE: Technically this should Object.defineProperty at
+        //       the next index, as push can be affected by
+        //       properties on Object.prototype and Array.prototype.
+        //       But that method's new, and collisions should be
+        //       rare, so use the more-compatible alternative.
+        if (callback.call(T, val, i, t)) {
+          res.push(val);
+        }
+      }
+    }
+
+    return res;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.18
+// Reference: http://es5.github.io/#x15.4.4.18
+if (!Array.prototype.forEach) {
+    Array.prototype.forEach = function(callback, thisArg) {
+
+
+        if (this === void 0 || this === null) {
+            throw new TypeError('Array.prototype.forEach called on null or undefined');
+        }
+
+        // 1. Let O be the result of calling toObject() passing the
+        // |this| value as the argument.
+        var O = Object(this);
+
+        // 2. Let lenValue be the result of calling the Get() internal
+        // method of O with the argument "length".
+        // 3. Let len be toUint32(lenValue).
+        var len = O.length >>> 0;
+
+        // 4. If isCallable(callback) is false, throw a TypeError exception.
+        // See: http://es5.github.com/#x9.11
+        if (callback.__class__ !== 'Function') {
+            throw new TypeError(callback + ' is not a function');
+        }
+
+        // 5. If thisArg was supplied, let T be thisArg; else let
+        // T be undefined.
+        var T = (arguments.length > 1) ? thisArg : void 0;
+
+
+        // 6. Let k be 0
+        //k = 0;
+
+        // 7. Repeat, while k < len
+        for (var k = 0; k < len; k++) {
+            var kValue;
+            // a. Let Pk be ToString(k).
+            //    This is implicit for LHS operands of the in operator
+            // b. Let kPresent be the result of calling the HasProperty
+            //    internal method of O with argument Pk.
+            //    This step can be combined with c
+            // c. If kPresent is true, then
+            if (k in O) {
+                // i. Let kValue be the result of calling the Get internal
+                // method of O with argument Pk.
+                kValue = O[k];
+                // ii. Call the Call internal method of callback with T as
+                // the this value and argument list containing kValue, k, and O.
+                callback.call(T, kValue, k, O);
+            }
+        }
+        // 8. return undefined
+    }
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/indexOf#Polyfill
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.14
+// Reference: http://es5.github.io/#x15.4.4.14
+if (!Array.prototype.indexOf) {
+  Array.prototype.indexOf = function(searchElement, fromIndex) {
+
+
+    // 1. Let o be the result of calling ToObject passing
+    //    the this value as the argument.
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.indexOf called on null or undefined');
+    }
+
+    var k;
+    var o = Object(this);
+
+    // 2. Let lenValue be the result of calling the Get
+    //    internal method of o with the argument "length".
+    // 3. Let len be ToUint32(lenValue).
+    var len = o.length >>> 0;
+
+    // 4. If len is 0, return -1.
+    if (len === 0) {
+      return -1;
+    }
+
+    // 5. If argument fromIndex was passed let n be
+    //    ToInteger(fromIndex); else let n be 0.
+    var n = +fromIndex || 0;
+
+    if (Math.abs(n) === Infinity) {
+      n = 0;
+    }
+
+    // 6. If n >= len, return -1.
+    if (n >= len) {
+      return -1;
+    }
+
+    // 7. If n >= 0, then Let k be n.
+    // 8. Else, n<0, Let k be len - abs(n).
+    //    If k is less than 0, then let k be 0.
+    k = Math.max(n >= 0 ? n : len - Math.abs(n), 0);
+
+    // 9. Repeat, while k < len
+    while (k < len) {
+      // a. Let Pk be ToString(k).
+      //   This is implicit for LHS operands of the in operator
+      // b. Let kPresent be the result of calling the
+      //    HasProperty internal method of o with argument Pk.
+      //   This step can be combined with c
+      // c. If kPresent is true, then
+      //    i.  Let elementK be the result of calling the Get
+      //        internal method of o with the argument ToString(k).
+      //   ii.  Let same be the result of applying the
+      //        Strict Equality Comparison Algorithm to
+      //        searchElement and elementK.
+      //  iii.  If same is true, return k.
+      if (k in o && o[k] === searchElement) {
+        return k;
+      }
+      k++;
+    }
+    return -1;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/isArray
+*/
+if (!Array.isArray) {
+  Array.isArray = function(arg) {
+
+    if (arg === void 0 || arg === null) {
+      return false;
+    }
+  	return (arg.__class__ === 'Array');
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/lastIndexOf
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.15
+// Reference: http://es5.github.io/#x15.4.4.15
+if (!Array.prototype.lastIndexOf) {
+  Array.prototype.lastIndexOf = function(searchElement, fromIndex) {
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.lastIndexOf called on null or undefined');
+    }
+
+    var n, k,
+      t = Object(this),
+      len = t.length >>> 0;
+    if (len === 0) {
+      return -1;
+    }
+
+    n = len - 1;
+    if (arguments.length > 1) {
+      n = Number(arguments[1]);
+      if (n != n) {
+        n = 0;
+      }
+      else if (n != 0 && n != Infinity && n != -Infinity) {
+        n = (n > 0 || -1) * Math.floor(Math.abs(n));
+      }
+    }
+
+    for (k = n >= 0 ? Math.min(n, len - 1) : len - Math.abs(n); k >= 0; k--) {
+      if (k in t && t[k] === searchElement) {
+        return k;
+      }
+    }
+    return -1;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.19
+// Reference: http://es5.github.io/#x15.4.4.19
+if (!Array.prototype.map) {
+
+  Array.prototype.map = function(callback, thisArg) {
+
+    var T, A, k;
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.map called on null or undefined');
+    }
+
+    // 1. Let O be the result of calling ToObject passing the |this|
+    //    value as the argument.
+    var O = Object(this);
+
+    // 2. Let lenValue be the result of calling the Get internal
+    //    method of O with the argument "length".
+    // 3. Let len be ToUint32(lenValue).
+    var len = O.length >>> 0;
+
+    // 4. If IsCallable(callback) is false, throw a TypeError exception.
+    // See: http://es5.github.com/#x9.11
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    // 5. If thisArg was supplied, let T be thisArg; else let T be undefined.
+    T = (arguments.length > 1) ? thisArg : void 0;
+
+    // 6. Let A be a new array created as if by the expression new Array(len)
+    //    where Array is the standard built-in constructor with that name and
+    //    len is the value of len.
+    A = new Array(len);
+
+    for (var k = 0; k < len; k++) {
+
+      var kValue, mappedValue;
+
+      // a. Let Pk be ToString(k).
+      //   This is implicit for LHS operands of the in operator
+      // b. Let kPresent be the result of calling the HasProperty internal
+      //    method of O with argument Pk.
+      //   This step can be combined with c
+      // c. If kPresent is true, then
+      if (k in O) {
+
+        // i. Let kValue be the result of calling the Get internal
+        //    method of O with argument Pk.
+        kValue = O[k];
+
+        // ii. Let mappedValue be the result of calling the Call internal
+        //     method of callback with T as the this value and argument
+        //     list containing kValue, k, and O.
+        mappedValue = callback.call(T, kValue, k, O);
+
+        // iii. Call the DefineOwnProperty internal method of A with arguments
+        // Pk, Property Descriptor
+        // { Value: mappedValue,
+        //   Writable: true,
+        //   Enumerable: true,
+        //   Configurable: true },
+        // and false.
+
+        // In browsers that support Object.defineProperty, use the following:
+        // Object.defineProperty(A, k, {
+        //   value: mappedValue,
+        //   writable: true,
+        //   enumerable: true,
+        //   configurable: true
+        // });
+
+        // For best browser support, use the following:
+        A[k] = mappedValue;
+      }
+    }
+    // 9. return A
+    return A;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/Reduce
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.21
+// Reference: http://es5.github.io/#x15.4.4.21
+if (!Array.prototype.reduce) {
+  Array.prototype.reduce = function(callback, initialValue) {
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.reduce called on null or undefined');
+    }
+
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    var t = Object(this), len = t.length >>> 0, k = 0, value;
+
+    if (arguments.length > 1)
+      {
+        value = initialValue;
+      }
+    else
+      {
+        while (k < len && !(k in t)) {
+          k++;
+        }
+        if (k >= len) {
+          throw new TypeError('Reduce of empty array with no initial value');
+        }
+        value = t[k++];
+      }
+
+    for (; k < len; k++) {
+      if (k in t) {
+        value = callback(value, t[k], k, t);
+      }
+    }
+    return value;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/ReduceRight
+*/
+// Production steps of ECMA-262, Edition 5, 15.4.4.22
+// Reference: http://es5.github.io/#x15.4.4.22
+if (!Array.prototype.reduceRight) {
+  Array.prototype.reduceRight = function(callback, initialValue) {
+
+    if (this === void 0 || this === null) {
+      throw new TypeError('Array.prototype.reduceRight called on null or undefined');
+    }
+
+    if (callback.__class__ !== 'Function') {
+      throw new TypeError(callback + ' is not a function');
+    }
+
+    var t = Object(this), len = t.length >>> 0, k = len - 1, value;
+    if (arguments.length > 1)
+      {
+        value = initialValue;
+      }
+    else
+      {
+        while (k >= 0 && !(k in t)) {
+          k--;
+        }
+        if (k < 0) {
+          throw new TypeError('Reduce of empty array with no initial value');
+        }
+        value = t[k--];
+      }
+
+    for (; k >= 0; k--) {
+      if (k in t) {
+        value = callback(value, t[k], k, t);
+      }
+    }
+    return value;
+  };
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
+*/
+if (!Date.prototype.toISOString) {
+  (function() {
+
+    function pad(number) {
+      if (number < 10) {
+        return '0' + number;
+      }
+      return number;
+    }
+
+    Date.prototype.toISOString = function() {
+      return this.getUTCFullYear() +
+        '-' + pad(this.getUTCMonth() + 1) +
+        '-' + pad(this.getUTCDate()) +
+        'T' + pad(this.getUTCHours()) +
+        ':' + pad(this.getUTCMinutes()) +
+        ':' + pad(this.getUTCSeconds()) +
+        '.' + (this.getUTCMilliseconds() / 1000).toFixed(3).slice(2, 5) +
+        'Z';
+    };
+
+  }());
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind#Polyfill
+
+WARNING! Bound functions used as constructors NOT supported by this polyfill!
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind#Bound_functions_used_as_constructors
+*/
+if (!Function.prototype.bind) {
+  Function.prototype.bind = function(oThis) {
+    if (this.__class__ !== 'Function') {
+      throw new TypeError('Function.prototype.bind - what is trying to be bound is not callable');
+    }
+
+    var aArgs   = Array.prototype.slice.call(arguments, 1),
+        fToBind = this,
+        fNOP    = function() {},
+        fBound  = function() {
+          return fToBind.apply(this instanceof fNOP
+                 ? this
+                 : oThis,
+                 aArgs.concat(Array.prototype.slice.call(arguments)));
+        };
+
+    if (this.prototype) {
+      // Function.prototype doesn't have a prototype property
+      fNOP.prototype = this.prototype;
+    }
+    fBound.prototype = new fNOP();
+
+    return fBound;
+  };
+}
+if (!Object.create) {
+  // Production steps of ECMA-262, Edition 5, 15.2.3.5
+  // Reference: http://es5.github.io/#x15.2.3.5
+  Object.create = (function() {
+    // To save on memory, use a shared constructor
+    function Temp() {}
+
+    // make a safe reference to Object.prototype.hasOwnProperty
+    var hasOwn = Object.prototype.hasOwnProperty;
+
+    return function(O) {
+      // 1. If Type(O) is not Object or Null throw a TypeError exception.
+      if (Object(O) !== O && O !== null) {
+        throw TypeError('Object prototype may only be an Object or null');
+      }
+
+      // 2. Let obj be the result of creating a new object as if by the
+      //    expression new Object() where Object is the standard built-in
+      //    constructor with that name
+      // 3. Set the [[Prototype]] internal property of obj to O.
+      Temp.prototype = O;
+      var obj = new Temp();
+      Temp.prototype = null; // Let's not keep a stray reference to O...
+
+      // 4. If the argument Properties is present and not undefined, add
+      //    own properties to obj as if by calling the standard built-in
+      //    function Object.defineProperties with arguments obj and
+      //    Properties.
+      if (arguments.length > 1) {
+        // Object.defineProperties does ToObject on its first argument.
+        var Properties = Object(arguments[1]);
+        for (var prop in Properties) {
+          if (hasOwn.call(Properties, prop)) {
+            var descriptor = Properties[prop];
+            if (Object(descriptor) !== descriptor) {
+              throw TypeError(prop + 'must be an object');
+            }
+            if ('get' in descriptor || 'set' in descriptor) {
+              throw new TypeError('getters & setters can not be defined on this javascript engine');
+            }
+            if ('value' in descriptor) {
+              obj[prop] = Properties[prop];
+            }
+
+          }
+        }
+      }
+
+      // 5. Return obj
+      return obj;
+    };
+  })();
+}
+/*
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperties#Polyfill
+*/
+if (!Object.defineProperties) {
+
+  Object.defineProperties = function(object, props) {
+
+    function hasProperty(obj, prop) {
+      return Object.prototype.hasOwnProperty.call(obj, prop);
+    }
+
+    function convertToDescriptor(desc) {
+
+      if (Object(desc) !== desc) {
+        throw new TypeError('Descriptor can only be an Object.');
+      }
+
+
+      var d = {};
+
+      if (hasProperty(desc, "enumerable")) {
+        d.enumerable = !!desc.enumerable;
+      }
+
+      if (hasProperty(desc, "configurable")) {
+        d.configurable = !!desc.configurable;
+      }
+
+      if (hasProperty(desc, "value")) {
+        d.value = desc.value;
+      }
+
+      if (hasProperty(desc, "writable")) {
+        d.writable = !!desc.writable;
+      }
+
+      if (hasProperty(desc, "get")) {
+        throw new TypeError('getters & setters can not be defined on this javascript engine');
+      }
+
+      if (hasProperty(desc, "set")) {
+        throw new TypeError('getters & setters can not be defined on this javascript engine');
+      }
+
+      return d;
+    }
+
+    if (Object(object) !== object) {
+      throw new TypeError('Object.defineProperties can only be called on Objects.');
+    }
+
+    if (Object(props) !== props) {
+      throw new TypeError('Properties can only be an Object.');
+    }
+
+    var properties = Object(props);
+    for (propName in properties) {
+      if (hasOwnProperty.call(properties, propName)) {
+        var descr = convertToDescriptor(properties[propName]);
+        object[propName] = descr.value;
+      }
+    }
+    return object;
+  }
+}
+if (!Object.defineProperty) {
+
+    Object.defineProperty = function defineProperty(object, property, descriptor) {
+
+        if (Object(object) !== object) {
+            throw new TypeError('Object.defineProperty can only be called on Objects.');
+        }
+
+        if (Object(descriptor) !== descriptor) {
+            throw new TypeError('Property description can only be an Object.');
+        }
+
+        if ('get' in descriptor || 'set' in descriptor) {
+            throw new TypeError('getters & setters can not be defined on this javascript engine');
+        }
+        // If it's a data property.
+        if ('value' in descriptor) {
+            // fail silently if 'writable', 'enumerable', or 'configurable'
+            // are requested but not supported
+            // can't implement these features; allow true but not false
+            /* if (
+                     ('writable' in descriptor && !descriptor.writable) ||
+                     ('enumerable' in descriptor && !descriptor.enumerable) ||
+                     ('configurable' in descriptor && !descriptor.configurable)
+                 )
+                     {
+                         throw new RangeError('This implementation of Object.defineProperty does not support configurable, enumerable, or writable properties SET to FALSE.');
+                     }*/
+
+
+            object[property] = descriptor.value;
+        }
+        return object;
+    }
+}
+/*
+https://github.com/es-shims/es5-shim/blob/master/es5-sham.js
+*/
+// ES5 15.2.3.9
+// http://es5.github.com/#x15.2.3.9
+if (!Object.freeze) {
+    Object.freeze = function freeze(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.freeze can only be called on Objects.');
+        }
+        // this is misleading and breaks feature-detection, but
+        // allows "securable" code to "gracefully" degrade to working
+        // but insecure code.
+        return object;
+    };
+}
+if (!Object.getOwnPropertyDescriptor) {
+
+    Object.getOwnPropertyDescriptor = function getOwnPropertyDescriptor(object, property) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.getOwnPropertyDescriptor can only be called on Objects.');
+        }
+
+        var descriptor;
+        if (!Object.prototype.hasOwnProperty.call(object, property)) {
+            return descriptor;
+        }
+
+        descriptor = {
+            enumerable: Object.prototype.propertyIsEnumerable.call(object, property),
+            configurable: true
+        };
+
+        descriptor.value = object[property];
+
+        var psPropertyType = object.reflect.find(property).type;
+        descriptor.writable = !(psPropertyType === "readonly");
+
+        return descriptor;
+    }
+}
+if (!Object.getOwnPropertyNames) {
+    Object.getOwnPropertyNames = function getOwnPropertyNames(object) {
+
+        if (Object(object) !== object) {
+            throw new TypeError('Object.getOwnPropertyNames can only be called on Objects.');
+        }
+        var names = [];
+        var hasOwnProperty = Object.prototype.hasOwnProperty;
+        var propertyIsEnumerable = Object.prototype.propertyIsEnumerable;
+        for (var prop in object) {
+            if (hasOwnProperty.call(object, prop)) {
+                names.push(prop);
+            }
+        }
+        var properties = object.reflect.properties;
+        var methods = object.reflect.methods;
+        var all = methods.concat(properties);
+        for (var i = 0; i < all.length; i++) {
+            var prop = all[i].name;
+            if (hasOwnProperty.call(object, prop) && !(propertyIsEnumerable.call(object, prop))) {
+                names.push(prop);
+            }
+        }
+        return names;
+    };
+}
+if (!Object.getPrototypeOf) {
+	Object.getPrototypeOf = function(object) {
+		if (Object(object) !== object) {
+			throw new TypeError('Object.getPrototypeOf can only be called on Objects.');
+		}
+		return object.__proto__;
+	}
+}
+// ES5 15.2.3.13
+// http://es5.github.com/#x15.2.3.13
+if (!Object.isExtensible) {
+    Object.isExtensible = function isExtensible(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.isExtensible can only be called on Objects.');
+        }
+        return true;
+    };
+}
+/*
+https://github.com/es-shims/es5-shim/blob/master/es5-sham.js
+*/
+// ES5 15.2.3.12
+// http://es5.github.com/#x15.2.3.12
+if (!Object.isFrozen) {
+    Object.isFrozen = function isFrozen(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.isFrozen can only be called on Objects.');
+        }
         return false;
-    }());
-    defineProperties(ArrayPrototype, {
-        sort: function sort(compareFn) {
-            if (typeof compareFn === 'undefined') {
-                return arraySort(this);
-            }
-            if (!isCallable(compareFn)) {
-                throw new TypeError('Array.prototype.sort callback must be a function');
-            }
-            return arraySort(this, compareFn);
-        }
-    }, sortIgnoresNonFunctions || !sortIgnoresUndefined || !sortThrowsOnRegex);
-
-    //
-    // Object
-    // ======
-    //
-
-    // ES5 15.2.3.14
-    // http://es5.github.com/#x15.2.3.14
-
-    // http://whattheheadsaid.com/2010/10/a-safer-object-keys-compatibility-implementation
-    var hasDontEnumBug = !isEnum({ 'toString': null }, 'toString');
-    var hasProtoEnumBug = isEnum(function () {}, 'prototype');
-    var hasStringEnumBug = !owns('x', '0');
-    var equalsConstructorPrototype = function (o) {
-        var ctor = o.constructor;
-        return ctor && ctor.prototype === o;
     };
-    var excludedKeys = {
-        $window: true,
-        $console: true,
-        $parent: true,
-        $self: true,
-        $frame: true,
-        $frames: true,
-        $frameElement: true,
-        $webkitIndexedDB: true,
-        $webkitStorageInfo: true,
-        $external: true,
-        $width: true,
-        $height: true
-    };
-    var hasAutomationEqualityBug = (function () {
-        /* globals window */
-        if (typeof window === 'undefined') {
-            return false;
-        }
-        for (var k in window) {
-            try {
-                if (!excludedKeys['$' + k] && owns(window, k) && window[k] !== null && typeof window[k] === 'object') {
-                    equalsConstructorPrototype(window[k]);
-                }
-            } catch (e) {
-                return true;
-            }
+}
+/*
+https://github.com/es-shims/es5-shim/blob/master/es5-sham.js
+*/
+// ES5 15.2.3.11
+// http://es5.github.com/#x15.2.3.11
+if (!Object.isSealed) {
+    Object.isSealed = function isSealed(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.isSealed can only be called on Objects.');
         }
         return false;
-    }());
-    var equalsConstructorPrototypeIfNotBuggy = function (object) {
-        if (typeof window === 'undefined' || !hasAutomationEqualityBug) {
-            return equalsConstructorPrototype(object);
-        }
-        try {
-            return equalsConstructorPrototype(object);
-        } catch (e) {
-            return false;
-        }
     };
-    var dontEnums = [
-        'toString',
-        'toLocaleString',
-        'valueOf',
-        'hasOwnProperty',
-        'isPrototypeOf',
-        'propertyIsEnumerable',
-        'constructor'
-    ];
-    var dontEnumsLength = dontEnums.length;
-
-    // taken directly from https://github.com/ljharb/is-arguments/blob/master/index.js
-    // can be replaced with require('is-arguments') if we ever use a build process instead
-    var isStandardArguments = function isArguments(value) {
-        return toStr(value) === '[object Arguments]';
-    };
-    var isLegacyArguments = function isArguments(value) {
-        return value !== null &&
-            typeof value === 'object' &&
-            typeof value.length === 'number' &&
-            value.length >= 0 &&
-            !isArray(value) &&
-            isCallable(value.callee);
-    };
-    var isArguments = isStandardArguments(arguments) ? isStandardArguments : isLegacyArguments;
-
-    defineProperties($Object, {
-        keys: function keys(object) {
-            var isFn = isCallable(object);
-            var isArgs = isArguments(object);
-            var isObject = object !== null && typeof object === 'object';
-            var isStr = isObject && isString(object);
-
-            if (!isObject && !isFn && !isArgs) {
-                throw new TypeError('Object.keys called on a non-object');
-            }
-
-            var theKeys = [];
-            var skipProto = hasProtoEnumBug && isFn;
-            if ((isStr && hasStringEnumBug) || isArgs) {
-                for (var i = 0; i < object.length; ++i) {
-                    pushCall(theKeys, $String(i));
-                }
-            }
-
-            if (!isArgs) {
-                for (var name in object) {
-                    if (!(skipProto && name === 'prototype') && owns(object, name)) {
-                        pushCall(theKeys, $String(name));
-                    }
-                }
-            }
-
-            if (hasDontEnumBug) {
-                var skipConstructor = equalsConstructorPrototypeIfNotBuggy(object);
-                for (var j = 0; j < dontEnumsLength; j++) {
-                    var dontEnum = dontEnums[j];
-                    if (!(skipConstructor && dontEnum === 'constructor') && owns(object, dontEnum)) {
-                        pushCall(theKeys, dontEnum);
-                    }
-                }
-            }
-            return theKeys;
+}
+if (!Object.keys) {
+    Object.keys = function(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.keys can only be called on Objects.');
         }
+        var hasOwnProperty = Object.prototype.hasOwnProperty;
+        var result = [];
+        for (var prop in object) {
+            if (hasOwnProperty.call(object, prop)) {
+                result.push(prop);
+            }
+        }
+        return result;
+    };
+}
+/*
+https://github.com/es-shims/es5-shim/blob/master/es5-sham.js
+*/
+// ES5 15.2.3.10
+// http://es5.github.com/#x15.2.3.10
+if (!Object.preventExtensions) {
+    Object.preventExtensions = function preventExtensions(object) {
+
+        if (Object(object) !== object) {
+            throw new TypeError('Object.preventExtensions can only be called on Objects.');
+        }
+        // this is misleading and breaks feature-detection, but
+        // allows "securable" code to "gracefully" degrade to working
+        // but insecure code.
+        return object;
+    };
+}
+/*
+https://github.com/es-shims/es5-shim/blob/master/es5-sham.js
+*/
+// ES5 15.2.3.8
+// http://es5.github.com/#x15.2.3.8
+if (!Object.seal) {
+    Object.seal = function seal(object) {
+        if (Object(object) !== object) {
+            throw new TypeError('Object.seal can only be called on Objects.');
+        }
+        // this is misleading and breaks feature-detection, but
+        // allows "securable" code to "gracefully" degrade to working
+        // but insecure code.
+        return object;
+    };
+}
+/*
+https://developer.mozilla.org/ru/docs/Web/JavaScript/Reference/Global_Objects/String/Trim
+*/
+if (!String.prototype.trim) {
+	// Вырезаем BOM и неразрывный пробел
+	String.prototype.trim = function() {
+		return this.replace(/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g, '');
+	};
+}
+
+/*! JSON v3.3.2 | https://bestiejs.github.io/json3 | Copyright 2012-2015, Kit Cambridge, Benjamin Tan | http://kit.mit-license.org */
+;(function () {
+  // Detect the `define` function exposed by asynchronous module loaders. The
+  // strict `define` check is necessary for compatibility with `r.js`.
+  var isLoader = typeof define === "function" && define.amd;
+
+  // A set of types used to distinguish objects from primitives.
+  var objectTypes = {
+    "function": true,
+    "object": true
+  };
+
+  // Detect the `exports` object exposed by CommonJS implementations.
+  var freeExports = objectTypes[typeof exports] && exports && !exports.nodeType && exports;
+
+  // Use the `global` object exposed by Node (including Browserify via
+  // `insert-module-globals`), Narwhal, and Ringo as the default context,
+  // and the `window` object in browsers. Rhino exports a `global` function
+  // instead.
+  var root = objectTypes[typeof window] && window || this,
+      freeGlobal = freeExports && objectTypes[typeof module] && module && !module.nodeType && typeof global == "object" && global;
+
+  if (freeGlobal && (freeGlobal.global === freeGlobal || freeGlobal.window === freeGlobal || freeGlobal.self === freeGlobal)) {
+    root = freeGlobal;
+  }
+
+  // Public: Initializes JSON 3 using the given `context` object, attaching the
+  // `stringify` and `parse` functions to the specified `exports` object.
+  function runInContext(context, exports) {
+    context || (context = root.Object());
+    exports || (exports = root.Object());
+
+    // Native constructor aliases.
+    var Number = context.Number || root.Number,
+        String = context.String || root.String,
+        Object = context.Object || root.Object,
+        Date = context.Date || root.Date,
+        SyntaxError = context.SyntaxError || root.SyntaxError,
+        TypeError = context.TypeError || root.TypeError,
+        Math = context.Math || root.Math,
+        nativeJSON = context.JSON || root.JSON;
+
+    // Delegate to the native `stringify` and `parse` implementations.
+    if (typeof nativeJSON == "object" && nativeJSON) {
+      exports.stringify = nativeJSON.stringify;
+      exports.parse = nativeJSON.parse;
+    }
+
+    // Convenience aliases.
+    var objectProto = Object.prototype,
+        getClass = objectProto.toString,
+        isProperty = objectProto.hasOwnProperty,
+        undefined;
+
+    // Internal: Contains `try...catch` logic used by other functions.
+    // This prevents other functions from being deoptimized.
+    function attempt(func, errorFunc) {
+      try {
+        func();
+      } catch (exception) {
+        if (errorFunc) {
+          errorFunc();
+        }
+      }
+    }
+
+    // Test the `Date#getUTC*` methods. Based on work by @Yaffle.
+    var isExtended = new Date(-3509827334573292);
+    attempt(function () {
+      // The `getUTCFullYear`, `Month`, and `Date` methods return nonsensical
+      // results for certain dates in Opera >= 10.53.
+      isExtended = isExtended.getUTCFullYear() == -109252 && isExtended.getUTCMonth() === 0 && isExtended.getUTCDate() === 1 &&
+        isExtended.getUTCHours() == 10 && isExtended.getUTCMinutes() == 37 && isExtended.getUTCSeconds() == 6 && isExtended.getUTCMilliseconds() == 708;
     });
 
-    var keysWorksWithArguments = $Object.keys && (function () {
-        // Safari 5.0 bug
-        return $Object.keys(arguments).length === 2;
-    }(1, 2));
-    var keysHasArgumentsLengthBug = $Object.keys && (function () {
-        var argKeys = $Object.keys(arguments);
-        return arguments.length !== 1 || argKeys.length !== 1 || argKeys[0] !== 1;
-    }(1));
-    var originalKeys = $Object.keys;
-    defineProperties($Object, {
-        keys: function keys(object) {
-            if (isArguments(object)) {
-                return originalKeys(arraySlice(object));
-            } else {
-                return originalKeys(object);
-            }
+    // Internal: Determines whether the native `JSON.stringify` and `parse`
+    // implementations are spec-compliant. Based on work by Ken Snyder.
+    function has(name) {
+      if (has[name] != null) {
+        // Return cached feature test result.
+        return has[name];
+      }
+      var isSupported;
+      if (name == "bug-string-char-index") {
+        // IE <= 7 doesn't support accessing string characters using square
+        // bracket notation. IE 8 only supports this for primitives.
+        isSupported = "a"[0] != "a";
+      } else if (name == "json") {
+        // Indicates whether both `JSON.stringify` and `JSON.parse` are
+        // supported.
+        isSupported = has("json-stringify") && has("date-serialization") && has("json-parse");
+      } else if (name == "date-serialization") {
+        // Indicates whether `Date`s can be serialized accurately by `JSON.stringify`.
+        isSupported = has("json-stringify") && isExtended;
+        if (isSupported) {
+          var stringify = exports.stringify;
+          attempt(function () {
+            isSupported =
+              // JSON 2, Prototype <= 1.7, and older WebKit builds incorrectly
+              // serialize extended years.
+              stringify(new Date(-8.64e15)) == '"-271821-04-20T00:00:00.000Z"' &&
+              // The milliseconds are optional in ES 5, but required in 5.1.
+              stringify(new Date(8.64e15)) == '"+275760-09-13T00:00:00.000Z"' &&
+              // Firefox <= 11.0 incorrectly serializes years prior to 0 as negative
+              // four-digit years instead of six-digit years. Credits: @Yaffle.
+              stringify(new Date(-621987552e5)) == '"-000001-01-01T00:00:00.000Z"' &&
+              // Safari <= 5.1.5 and Opera >= 10.53 incorrectly serialize millisecond
+              // values less than 1000. Credits: @Yaffle.
+              stringify(new Date(-1)) == '"1969-12-31T23:59:59.999Z"';
+          });
         }
-    }, !keysWorksWithArguments || keysHasArgumentsLengthBug);
-
-    //
-    // Date
-    // ====
-    //
-
-    var hasNegativeMonthYearBug = new Date(-3509827329600292).getUTCMonth() !== 0;
-    var aNegativeTestDate = new Date(-1509842289600292);
-    var aPositiveTestDate = new Date(1449662400000);
-    var hasToUTCStringFormatBug = aNegativeTestDate.toUTCString() !== 'Mon, 01 Jan -45875 11:59:59 GMT';
-    var hasToDateStringFormatBug;
-    var hasToStringFormatBug;
-    var timeZoneOffset = aNegativeTestDate.getTimezoneOffset();
-    if (timeZoneOffset < -720) {
-        hasToDateStringFormatBug = aNegativeTestDate.toDateString() !== 'Tue Jan 02 -45875';
-        hasToStringFormatBug = !(/^Thu Dec 10 2015 \d\d:\d\d:\d\d GMT[-\+]\d\d\d\d(?: |$)/).test(aPositiveTestDate.toString());
-    } else {
-        hasToDateStringFormatBug = aNegativeTestDate.toDateString() !== 'Mon Jan 01 -45875';
-        hasToStringFormatBug = !(/^Wed Dec 09 2015 \d\d:\d\d:\d\d GMT[-\+]\d\d\d\d(?: |$)/).test(aPositiveTestDate.toString());
-    }
-
-    var originalGetFullYear = call.bind(Date.prototype.getFullYear);
-    var originalGetMonth = call.bind(Date.prototype.getMonth);
-    var originalGetDate = call.bind(Date.prototype.getDate);
-    var originalGetHours = call.bind(Date.prototype.getHours);
-    var originalGetMinutes = call.bind(Date.prototype.getMinutes);
-    var originalGetSeconds = call.bind(Date.prototype.getSeconds);
-    var originalGetMilliseconds = call.bind(Date.prototype.getMilliseconds);
-    var originalGetUTCFullYear = call.bind(Date.prototype.getUTCFullYear);
-    var originalGetUTCMonth = call.bind(Date.prototype.getUTCMonth);
-    var originalGetUTCDate = call.bind(Date.prototype.getUTCDate);
-    var originalGetUTCDay = call.bind(Date.prototype.getUTCDay);
-    var originalGetUTCHours = call.bind(Date.prototype.getUTCHours);
-    var originalGetUTCMinutes = call.bind(Date.prototype.getUTCMinutes);
-    var originalGetUTCSeconds = call.bind(Date.prototype.getUTCSeconds);
-    var originalGetUTCMilliseconds = call.bind(Date.prototype.getUTCMilliseconds);
-    var dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    var monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var daysInMonth = function daysInMonth(month, year) {
-        return originalGetDate(new Date(year, month, 0));
-    };
-    // defineProperty(object, property, replacement, true);
-    defineProperties(Date.prototype, {
-        getHours: Date.prototype.getHours,
-        getMinutes: Date.prototype.getMinutes,
-        getSeconds: Date.prototype.getSeconds,
-        getMilliseconds: Date.prototype.getMilliseconds,
-    },true);
-
-    defineProperties(Date.prototype, {
-        getFullYear: function getFullYear() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetFullYear(this);
-            if (year < 0 && originalGetMonth(this) > 11) {
-                return year + 1;
-            }
-            return year;
-        },
-        getMonth: function getMonth() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetFullYear(this);
-            var month = originalGetMonth(this);
-            if (year < 0 && month > 11) {
-                return 0;
-            }
-            return month;
-        },
-        getDate: function getDate() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetFullYear(this);
-            var month = originalGetMonth(this);
-            var date = originalGetDate(this);
-            if (year < 0 && month > 11) {
-                if (month === 12) {
-                    return date;
-                }
-                var days = daysInMonth(0, year + 1);
-                return (days - date) + 1;
-            }
-            return date;
-        },
-        getUTCFullYear: function getUTCFullYear() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetUTCFullYear(this);
-            if (year < 0 && originalGetUTCMonth(this) > 11) {
-                return year + 1;
-            }
-            return year;
-        },
-        getUTCMonth: function getUTCMonth() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetUTCFullYear(this);
-            var month = originalGetUTCMonth(this);
-            if (year < 0 && month > 11) {
-                return 0;
-            }
-            return month;
-        },
-        getUTCDate: function getUTCDate() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var year = originalGetUTCFullYear(this);
-            var month = originalGetUTCMonth(this);
-            var date = originalGetUTCDate(this);
-            if (year < 0 && month > 11) {
-                if (month === 12) {
-                    return date;
-                }
-                var days = daysInMonth(0, year + 1);
-                return (days - date) + 1;
-            }
-            return date;
-        }
-    }, hasNegativeMonthYearBug);
-
-    defineProperties(Date.prototype, {
-        toUTCString: function toUTCString() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var day = originalGetUTCDay(this);
-            var date = originalGetUTCDate(this);
-            var month = originalGetUTCMonth(this);
-            var year = originalGetUTCFullYear(this);
-            var hour = originalGetUTCHours(this);
-            var minute = originalGetUTCMinutes(this);
-            var second = originalGetUTCSeconds(this);
-            return dayName[day] + ', ' +
-                (date < 10 ? '0' + date : date) + ' ' +
-                monthName[month] + ' ' +
-                year + ' ' +
-                (hour < 10 ? '0' + hour : hour) + ':' +
-                (minute < 10 ? '0' + minute : minute) + ':' +
-                (second < 10 ? '0' + second : second) + ' GMT';
-        }
-    }, hasNegativeMonthYearBug || hasToUTCStringFormatBug);
-
-    // Opera 12 has `,`
-    defineProperties(Date.prototype, {
-        toDateString: function toDateString() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var day = this.getDay();
-            var date = this.getDate();
-            var month = this.getMonth();
-            var year = this.getFullYear();
-            return dayName[day] + ' ' +
-                monthName[month] + ' ' +
-                (date < 10 ? '0' + date : date) + ' ' +
-                year;
-        }
-    }, hasNegativeMonthYearBug || hasToDateStringFormatBug);
-
-    // can't use defineProperties here because of toString enumeration issue in IE <= 8
-    if (hasNegativeMonthYearBug || hasToStringFormatBug) {
-        Date.prototype.toString = function toString() {
-            if (!this || !(this instanceof Date)) {
-                throw new TypeError('this is not a Date object.');
-            }
-            var day = this.getDay();
-            var date = this.getDate();
-            var month = this.getMonth();
-            var year = this.getFullYear();
-            var hour = this.getHours();
-            var minute = this.getMinutes();
-            var second = this.getSeconds();
-            var timezoneOffset = this.getTimezoneOffset();
-            var hoursOffset = Math.floor(Math.abs(timezoneOffset) / 60);
-            var minutesOffset = Math.floor(Math.abs(timezoneOffset) % 60);
-            return dayName[day] + ' ' +
-                monthName[month] + ' ' +
-                (date < 10 ? '0' + date : date) + ' ' +
-                year + ' ' +
-                (hour < 10 ? '0' + hour : hour) + ':' +
-                (minute < 10 ? '0' + minute : minute) + ':' +
-                (second < 10 ? '0' + second : second) + ' GMT' +
-                (timezoneOffset > 0 ? '-' : '+') +
-                (hoursOffset < 10 ? '0' + hoursOffset : hoursOffset) +
-                (minutesOffset < 10 ? '0' + minutesOffset : minutesOffset);
-        };
-        if (supportsDescriptors) {
-            $Object.defineProperty(Date.prototype, 'toString', {
-                configurable: true,
-                enumerable: false,
-                writable: true
+      } else {
+        var value, serialized = '{"a":[1,true,false,null,"\\u0000\\b\\n\\f\\r\\t"]}';
+        // Test `JSON.stringify`.
+        if (name == "json-stringify") {
+          var stringify = exports.stringify, stringifySupported = typeof stringify == "function";
+          if (stringifySupported) {
+            // A test function object with a custom `toJSON` method.
+            (value = function () {
+              return 1;
+            }).toJSON = value;
+            attempt(function () {
+              stringifySupported =
+                // Firefox 3.1b1 and b2 serialize string, number, and boolean
+                // primitives as object literals.
+                stringify(0) === "0" &&
+                // FF 3.1b1, b2, and JSON 2 serialize wrapped primitives as object
+                // literals.
+                stringify(new Number()) === "0" &&
+                stringify(new String()) == '""' &&
+                // FF 3.1b1, 2 throw an error if the value is `null`, `undefined`, or
+                // does not define a canonical JSON representation (this applies to
+                // objects with `toJSON` properties as well, *unless* they are nested
+                // within an object or array).
+                stringify(getClass) === undefined &&
+                // IE 8 serializes `undefined` as `"undefined"`. Safari <= 5.1.7 and
+                // FF 3.1b3 pass this test.
+                stringify(undefined) === undefined &&
+                // Safari <= 5.1.7 and FF 3.1b3 throw `Error`s and `TypeError`s,
+                // respectively, if the value is omitted entirely.
+                stringify() === undefined &&
+                // FF 3.1b1, 2 throw an error if the given value is not a number,
+                // string, array, object, Boolean, or `null` literal. This applies to
+                // objects with custom `toJSON` methods as well, unless they are nested
+                // inside object or array literals. YUI 3.0.0b1 ignores custom `toJSON`
+                // methods entirely.
+                stringify(value) === "1" &&
+                stringify([value]) == "[1]" &&
+                // Prototype <= 1.6.1 serializes `[undefined]` as `"[]"` instead of
+                // `"[null]"`.
+                stringify([undefined]) == "[null]" &&
+                // YUI 3.0.0b1 fails to serialize `null` literals.
+                stringify(null) == "null" &&
+                // FF 3.1b1, 2 halts serialization if an array contains a function:
+                // `[1, true, getClass, 1]` serializes as "[1,true,],". FF 3.1b3
+                // elides non-JSON values from objects and arrays, unless they
+                // define custom `toJSON` methods.
+                stringify([undefined, getClass, null]) == "[null,null,null]" &&
+                // Simple serialization test. FF 3.1b1 uses Unicode escape sequences
+                // where character escape codes are expected (e.g., `\b` => `\u0008`).
+                stringify({ "a": [value, true, false, null, "\x00\b\n\f\r\t"] }) == serialized &&
+                // FF 3.1b1 and b2 ignore the `filter` and `width` arguments.
+                stringify(null, value) === "1" &&
+                stringify([1, 2], null, 1) == "[\n 1,\n 2\n]";
+            }, function () {
+              stringifySupported = false;
             });
+          }
+          isSupported = stringifySupported;
         }
+        // Test `JSON.parse`.
+        if (name == "json-parse") {
+          var parse = exports.parse, parseSupported;
+          if (typeof parse == "function") {
+            attempt(function () {
+              // FF 3.1b1, b2 will throw an exception if a bare literal is provided.
+              // Conforming implementations should also coerce the initial argument to
+              // a string prior to parsing.
+              if (parse("0") === 0 && !parse(false)) {
+                // Simple parsing test.
+                value = parse(serialized);
+                parseSupported = value["a"].length == 5 && value["a"][0] === 1;
+                if (parseSupported) {
+                  attempt(function () {
+                    // Safari <= 5.1.2 and FF 3.1b1 allow unescaped tabs in strings.
+                    parseSupported = !parse('"\t"');
+                  });
+                  if (parseSupported) {
+                    attempt(function () {
+                      // FF 4.0 and 4.0.1 allow leading `+` signs and leading
+                      // decimal points. FF 4.0, 4.0.1, and IE 9-10 also allow
+                      // certain octal literals.
+                      parseSupported = parse("01") !== 1;
+                    });
+                  }
+                  if (parseSupported) {
+                    attempt(function () {
+                      // FF 4.0, 4.0.1, and Rhino 1.7R3-R4 allow trailing decimal
+                      // points. These environments, along with FF 3.1b1 and 2,
+                      // also allow trailing commas in JSON objects and arrays.
+                      parseSupported = parse("1.") !== 1;
+                    });
+                  }
+                }
+              }
+            }, function () {
+              parseSupported = false;
+            });
+          }
+          isSupported = parseSupported;
+        }
+      }
+      return has[name] = !!isSupported;
     }
+    has["bug-string-char-index"] = has["date-serialization"] = has["json"] = has["json-stringify"] = has["json-parse"] = null;
 
-    // ES5 15.9.5.43
-    // http://es5.github.com/#x15.9.5.43
-    // This function returns a String value represent the instance in time
-    // represented by this Date object. The format of the String is the Date Time
-    // string format defined in 15.9.1.15. All fields are present in the String.
-    // The time zone is always UTC, denoted by the suffix Z. If the time value of
-    // this object is not a finite Number a RangeError exception is thrown.
-    var negativeDate = -62198755200000;
-    var negativeYearString = '-000001';
-    var hasNegativeDateBug = Date.prototype.toISOString && new Date(negativeDate).toISOString().indexOf(negativeYearString) === -1;
-    var hasSafari51DateBug = Date.prototype.toISOString && new Date(-1).toISOString() !== '1969-12-31T23:59:59.999Z';
+    if (!has("json")) {
+      // Common `[[Class]]` name aliases.
+      var functionClass = "[object Function]",
+          dateClass = "[object Date]",
+          numberClass = "[object Number]",
+          stringClass = "[object String]",
+          arrayClass = "[object Array]",
+          booleanClass = "[object Boolean]";
 
-    var getTime = call.bind(Date.prototype.getTime);
+      // Detect incomplete support for accessing string characters by index.
+      var charIndexBuggy = has("bug-string-char-index");
 
-    defineProperties(Date.prototype, {
-        toISOString: function toISOString() {
-            if (!isFinite(this) || !isFinite(getTime(this))) {
-                // Adope Photoshop requires the second check.
-                throw new RangeError('Date.prototype.toISOString called on non-finite value.');
-            }
+      // Internal: Normalizes the `for...in` iteration algorithm across
+      // environments. Each enumerated key is yielded to a `callback` function.
+      var forOwn = function (object, callback) {
+        var size = 0, Properties, dontEnums, property;
 
-            var year = originalGetUTCFullYear(this);
+        // Tests for bugs in the current environment's `for...in` algorithm. The
+        // `valueOf` property inherits the non-enumerable flag from
+        // `Object.prototype` in older versions of IE, Netscape, and Mozilla.
+        (Properties = function () {
+          this.valueOf = 0;
+        }).prototype.valueOf = 0;
 
-            var month = originalGetUTCMonth(this);
-            // see https://github.com/es-shims/es5-shim/issues/111
-            year += Math.floor(month / 12);
-            month = ((month % 12) + 12) % 12;
-
-            // the date time string format is specified in 15.9.1.15.
-            var result = [month + 1, originalGetUTCDate(this), originalGetUTCHours(this), originalGetUTCMinutes(this), originalGetUTCSeconds(this)];
-            year = (
-                (year < 0 ? '-' : (year > 9999 ? '+' : '')) +
-                strSlice('00000' + Math.abs(year), (0 <= year && year <= 9999) ? -4 : -6)
-            );
-
-            for (var i = 0; i < result.length; ++i) {
-                // pad months, days, hours, minutes, and seconds to have two digits.
-                result[i] = strSlice('00' + result[i], -2);
-            }
-            // pad milliseconds to have three digits.
-            return (
-                year + '-' + arraySlice(result, 0, 2).join('-') +
-                'T' + arraySlice(result, 2).join(':') + '.' +
-                strSlice('000' + originalGetUTCMilliseconds(this), -3) + 'Z'
-            );
+        // Iterate over a new instance of the `Properties` class.
+        dontEnums = new Properties();
+        for (property in dontEnums) {
+          // Ignore all properties inherited from `Object.prototype`.
+          if (isProperty.call(dontEnums, property)) {
+            size++;
+          }
         }
-    }, hasNegativeDateBug || hasSafari51DateBug);
+        Properties = dontEnums = null;
 
-    // ES5 15.9.5.44
-    // http://es5.github.com/#x15.9.5.44
-    // This function provides a String representation of a Date object for use by
-    // JSON.stringify (15.12.3).
-    var dateToJSONIsSupported = (function () {
-        try {
-            return Date.prototype.toJSON &&
-                new Date(NaN).toJSON() === null &&
-                new Date(negativeDate).toJSON().indexOf(negativeYearString) !== -1 &&
-                Date.prototype.toJSON.call({ // generic
-                    toISOString: function () { return true; }
-                });
-        } catch (e) {
-            return false;
-        }
-    }());
-    if (!dateToJSONIsSupported) {
-        Date.prototype.toJSON = function toJSON(key) {
-            // When the toJSON method is called with argument key, the following
-            // steps are taken:
-
-            // 1.  Let O be the result of calling ToObject, giving it the this
-            // value as its argument.
-            // 2. Let tv be ES.ToPrimitive(O, hint Number).
-            var O = $Object(this);
-            var tv = ES.ToPrimitive(O);
-            // 3. If tv is a Number and is not finite, return null.
-            if (typeof tv === 'number' && !isFinite(tv)) {
-                return null;
+        // Normalize the iteration algorithm.
+        if (!size) {
+          // A list of non-enumerable properties inherited from `Object.prototype`.
+          dontEnums = ["valueOf", "toString", "toLocaleString", "propertyIsEnumerable", "isPrototypeOf", "hasOwnProperty", "constructor"];
+          // IE <= 8, Mozilla 1.0, and Netscape 6.2 ignore shadowed non-enumerable
+          // properties.
+          forOwn = function (object, callback) {
+            var isFunction = getClass.call(object) == functionClass, property, length;
+            var hasProperty = !isFunction && typeof object.constructor != "function" && objectTypes[typeof object.hasOwnProperty] && object.hasOwnProperty || isProperty;
+            for (property in object) {
+              // Gecko <= 1.0 enumerates the `prototype` property of functions under
+              // certain conditions; IE does not.
+              if (!(isFunction && property == "prototype") && hasProperty.call(object, property)) {
+                callback(property);
+              }
             }
-            // 4. Let toISO be the result of calling the [[Get]] internal method of
-            // O with argument "toISOString".
-            var toISO = O.toISOString;
-            // 5. If IsCallable(toISO) is false, throw a TypeError exception.
-            if (!isCallable(toISO)) {
-                throw new TypeError('toISOString property is not callable');
+            // Manually invoke the callback for each non-enumerable property.
+            for (length = dontEnums.length; property = dontEnums[--length];) {
+              if (hasProperty.call(object, property)) {
+                callback(property);
+              }
             }
-            // 6. Return the result of calling the [[Call]] internal method of
-            //  toISO with O as the this value and an empty argument list.
-            return toISO.call(O);
-
-            // NOTE 1 The argument is ignored.
-
-            // NOTE 2 The toJSON function is intentionally generic; it does not
-            // require that its this value be a Date object. Therefore, it can be
-            // transferred to other kinds of objects for use as a method. However,
-            // it does require that any such object have a toISOString method. An
-            // object is free to use the argument key to filter its
-            // stringification.
-        };
-    }
-
-    // ES5 15.9.4.2
-    // http://es5.github.com/#x15.9.4.2
-    // based on work shared by Daniel Friesen (dantman)
-    // http://gist.github.com/303249
-    var supportsExtendedYears = Date.parse('+033658-09-27T01:46:40.000Z') === 1e15;
-    var acceptsInvalidDates = !isNaN(Date.parse('2012-04-04T24:00:00.500Z')) || !isNaN(Date.parse('2012-11-31T23:59:59.000Z')) || !isNaN(Date.parse('2012-12-31T23:59:60.000Z'));
-    var doesNotParseY2KNewYear = isNaN(Date.parse('2000-01-01T00:00:00.000Z'));
-    if (doesNotParseY2KNewYear || acceptsInvalidDates || !supportsExtendedYears) {
-        // XXX global assignment won't work in embeddings that use
-        // an alternate object for the context.
-        /* global Date: true */
-        /* eslint-disable no-undef */
-        var maxSafeUnsigned32Bit = Math.pow(2, 31) - 1;
-        var hasSafariSignedIntBug = isActualNaN(new Date(1970, 0, 1, 0, 0, 0, maxSafeUnsigned32Bit + 1).getTime());
-        /* eslint-disable no-implicit-globals */
-        Date = (function (NativeDate) {
-        /* eslint-enable no-implicit-globals */
-        /* eslint-enable no-undef */
-            // Date.length === 7
-            var DateShim = function Date(Y, M, D, h, m, s, ms) {
-                var length = arguments.length;
-                var date;
-                if (this instanceof NativeDate) {
-                    var seconds = s;
-                    var millis = ms;
-                    if (hasSafariSignedIntBug && length >= 7 && ms > maxSafeUnsigned32Bit) {
-                        // work around a Safari 8/9 bug where it treats the seconds as signed
-                        var msToShift = Math.floor(ms / maxSafeUnsigned32Bit) * maxSafeUnsigned32Bit;
-                        var sToShift = Math.floor(msToShift / 1e3);
-                        seconds += sToShift;
-                        millis -= sToShift * 1e3;
-                    }
-                    date = length === 1 && $String(Y) === Y ? // isString(Y)
-                        // We explicitly pass it through parse:
-                        new NativeDate(DateShim.parse(Y)) :
-                        // We have to manually make calls depending on argument
-                        // length here
-                        length >= 7 ? new NativeDate(Y, M, D, h, m, seconds, millis) :
-                        length >= 6 ? new NativeDate(Y, M, D, h, m, seconds) :
-                        length >= 5 ? new NativeDate(Y, M, D, h, m) :
-                        length >= 4 ? new NativeDate(Y, M, D, h) :
-                        length >= 3 ? new NativeDate(Y, M, D) :
-                        length >= 2 ? new NativeDate(Y, M) :
-                        length >= 1 ? new NativeDate(Y instanceof NativeDate ? +Y : Y) :
-                                      new NativeDate();
-                } else {
-                    date = NativeDate.apply(this, arguments);
-                }
-                if (!isPrimitive(date)) {
-                    // Prevent mixups with unfixed Date object
-                    defineProperties(date, { constructor: DateShim }, true);
-                }
-                return date;
-            };
-
-            // 15.9.1.15 Date Time String Format.
-            var isoDateExpression = new RegExp('^' +
-                '(\\d{4}|[+-]\\d{6})' + // four-digit year capture or sign +
-                                          // 6-digit extended year
-                '(?:-(\\d{2})' + // optional month capture
-                '(?:-(\\d{2})' + // optional day capture
-                '(?:' + // capture hours:minutes:seconds.milliseconds
-                    'T(\\d{2})' + // hours capture
-                    ':(\\d{2})' + // minutes capture
-                    '(?:' + // optional :seconds.milliseconds
-                        ':(\\d{2})' + // seconds capture
-                        '(?:(\\.\\d{1,}))?' + // milliseconds capture
-                    ')?' +
-                '(' + // capture UTC offset component
-                    'Z|' + // UTC capture
-                    '(?:' + // offset specifier +/-hours:minutes
-                        '([-+])' + // sign capture
-                        '(\\d{2})' + // hours offset capture
-                        ':(\\d{2})' + // minutes offset capture
-                    ')' +
-                ')?)?)?)?' +
-            '$');
-
-            var months = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365];
-
-            var dayFromMonth = function dayFromMonth(year, month) {
-                var t = month > 1 ? 1 : 0;
-                return (
-                    months[month] +
-                    Math.floor((year - 1969 + t) / 4) -
-                    Math.floor((year - 1901 + t) / 100) +
-                    Math.floor((year - 1601 + t) / 400) +
-                    (365 * (year - 1970))
-                );
-            };
-
-            var toUTC = function toUTC(t) {
-                var s = 0;
-                var ms = t;
-                if (hasSafariSignedIntBug && ms > maxSafeUnsigned32Bit) {
-                    // work around a Safari 8/9 bug where it treats the seconds as signed
-                    var msToShift = Math.floor(ms / maxSafeUnsigned32Bit) * maxSafeUnsigned32Bit;
-                    var sToShift = Math.floor(msToShift / 1e3);
-                    s += sToShift;
-                    ms -= sToShift * 1e3;
-                }
-                return $Number(new NativeDate(1970, 0, 1, 0, 0, s, ms));
-            };
-
-            // Copy any custom methods a 3rd party library may have added
-            for (var key in NativeDate) {
-                if (owns(NativeDate, key)) {
-                    DateShim[key] = NativeDate[key];
-                }
-            }
-
-            // Copy "native" methods explicitly; they may be non-enumerable
-            defineProperties(DateShim, {
-                now: NativeDate.now,
-                UTC: NativeDate.UTC
-            }, true);
-            DateShim.prototype = NativeDate.prototype;
-            defineProperties(DateShim.prototype, { constructor: DateShim }, true);
-
-            // Upgrade Date.parse to handle simplified ISO 8601 strings
-            var parseShim = function parse(string) {
-                var match = isoDateExpression.exec(string);
-                if (match) {
-                    // parse months, days, hours, minutes, seconds, and milliseconds
-                    // provide default values if necessary
-                    // parse the UTC offset component
-                    var year = $Number(match[1]),
-                        month = $Number(match[2] || 1) - 1,
-                        day = $Number(match[3] || 1) - 1,
-                        hour = $Number(match[4] || 0),
-                        minute = $Number(match[5] || 0),
-                        second = $Number(match[6] || 0),
-                        millisecond = Math.floor($Number(match[7] || 0) * 1000),
-                        // When time zone is missed, local offset should be used
-                        // (ES 5.1 bug)
-                        // see https://bugs.ecmascript.org/show_bug.cgi?id=112
-                        isLocalTime = Boolean(match[4] && !match[8]),
-                        signOffset = match[9] === '-' ? 1 : -1,
-                        hourOffset = $Number(match[10] || 0),
-                        minuteOffset = $Number(match[11] || 0),
-                        result;
-                    var hasMinutesOrSecondsOrMilliseconds = minute > 0 || second > 0 || millisecond > 0;
-                    if (
-                        hour < (hasMinutesOrSecondsOrMilliseconds ? 24 : 25) &&
-                        minute < 60 && second < 60 && millisecond < 1000 &&
-                        month > -1 && month < 12 && hourOffset < 24 &&
-                        minuteOffset < 60 && // detect invalid offsets
-                        day > -1 &&
-                        day < (dayFromMonth(year, month + 1) - dayFromMonth(year, month))
-                    ) {
-                        result = (
-                            ((dayFromMonth(year, month) + day) * 24) +
-                            hour +
-                            (hourOffset * signOffset)
-                        ) * 60;
-                        result = ((
-                            ((result + minute + (minuteOffset * signOffset)) * 60) +
-                            second
-                        ) * 1000) + millisecond;
-                        if (isLocalTime) {
-                            result = toUTC(result);
-                        }
-                        if (-8.64e15 <= result && result <= 8.64e15) {
-                            return result;
-                        }
-                    }
-                    return NaN;
-                }
-                return NativeDate.parse.apply(this, arguments);
-            };
-            defineProperties(DateShim, { parse: parseShim });
-
-            return DateShim;
-        }(Date));
-        /* global Date: false */
-    }
-
-    // ES5 15.9.4.4
-    // http://es5.github.com/#x15.9.4.4
-    if (!Date.now) {
-        Date.now = function now() {
-            return new Date().getTime();
-        };
-    }
-
-    //
-    // Number
-    // ======
-    //
-
-    // ES5.1 15.7.4.5
-    // http://es5.github.com/#x15.7.4.5
-    var hasToFixedBugs = NumberPrototype.toFixed && (
-      (0.00008).toFixed(3) !== '0.000' ||
-      (0.9).toFixed(0) !== '1' ||
-      (1.255).toFixed(2) !== '1.25' ||
-      (1000000000000000128).toFixed(0) !== '1000000000000000128'
-    );
-
-    var toFixedHelpers = {
-        base: 1e7,
-        size: 6,
-        data: [0, 0, 0, 0, 0, 0],
-        multiply: function multiply(n, c) {
-            var i = -1;
-            var c2 = c;
-            while (++i < toFixedHelpers.size) {
-                c2 += n * toFixedHelpers.data[i];
-                toFixedHelpers.data[i] = c2 % toFixedHelpers.base;
-                c2 = Math.floor(c2 / toFixedHelpers.base);
-            }
-        },
-        divide: function divide(n) {
-            var i = toFixedHelpers.size;
-            var c = 0;
-            while (--i >= 0) {
-                c += toFixedHelpers.data[i];
-                toFixedHelpers.data[i] = Math.floor(c / n);
-                c = (c % n) * toFixedHelpers.base;
-            }
-        },
-        numToString: function numToString() {
-            var i = toFixedHelpers.size;
-            var s = '';
-            while (--i >= 0) {
-                if (s !== '' || i === 0 || toFixedHelpers.data[i] !== 0) {
-                    var t = $String(toFixedHelpers.data[i]);
-                    if (s === '') {
-                        s = t;
-                    } else {
-                        s += strSlice('0000000', 0, 7 - t.length) + t;
-                    }
-                }
-            }
-            return s;
-        },
-        pow: function pow(x, n, acc) {
-            return (n === 0 ? acc : (n % 2 === 1 ? pow(x, n - 1, acc * x) : pow(x * x, n / 2, acc)));
-        },
-        log: function log(x) {
-            var n = 0;
-            var x2 = x;
-            while (x2 >= 4096) {
-                n += 12;
-                x2 /= 4096;
-            }
-            while (x2 >= 2) {
-                n += 1;
-                x2 /= 2;
-            }
-            return n;
-        }
-    };
-
-    var toFixedShim = function toFixed(fractionDigits) {
-        var f, x, s, m, e, z, j, k;
-
-        // Test for NaN and round fractionDigits down
-        f = $Number(fractionDigits);
-        f = isActualNaN(f) ? 0 : Math.floor(f);
-
-        if (f < 0 || f > 20) {
-            throw new RangeError('Number.toFixed called with invalid number of decimals');
-        }
-
-        x = $Number(this);
-
-        if (isActualNaN(x)) {
-            return 'NaN';
-        }
-
-        // If it is too big or small, return the string value of the number
-        if (x <= -1e21 || x >= 1e21) {
-            return $String(x);
-        }
-
-        s = '';
-
-        if (x < 0) {
-            s = '-';
-            x = -x;
-        }
-
-        m = '0';
-
-        if (x > 1e-21) {
-            // 1e-21 < x < 1e21
-            // -70 < log2(x) < 70
-            e = toFixedHelpers.log(x * toFixedHelpers.pow(2, 69, 1)) - 69;
-            z = (e < 0 ? x * toFixedHelpers.pow(2, -e, 1) : x / toFixedHelpers.pow(2, e, 1));
-            z *= 0x10000000000000; // Math.pow(2, 52);
-            e = 52 - e;
-
-            // -18 < e < 122
-            // x = z / 2 ^ e
-            if (e > 0) {
-                toFixedHelpers.multiply(0, z);
-                j = f;
-
-                while (j >= 7) {
-                    toFixedHelpers.multiply(1e7, 0);
-                    j -= 7;
-                }
-
-                toFixedHelpers.multiply(toFixedHelpers.pow(10, j, 1), 0);
-                j = e - 1;
-
-                while (j >= 23) {
-                    toFixedHelpers.divide(1 << 23);
-                    j -= 23;
-                }
-
-                toFixedHelpers.divide(1 << j);
-                toFixedHelpers.multiply(1, 1);
-                toFixedHelpers.divide(2);
-                m = toFixedHelpers.numToString();
-            } else {
-                toFixedHelpers.multiply(0, z);
-                toFixedHelpers.multiply(1 << (-e), 0);
-                m = toFixedHelpers.numToString() + strSlice('0.00000000000000000000', 2, 2 + f);
-            }
-        }
-
-        if (f > 0) {
-            k = m.length;
-
-            if (k <= f) {
-                m = s + strSlice('0.0000000000000000000', 0, f - k + 2) + m;
-            } else {
-                m = s + strSlice(m, 0, k - f) + '.' + strSlice(m, k - f);
-            }
+          };
         } else {
-            m = s + m;
-        }
-
-        return m;
-    };
-    defineProperties(NumberPrototype, { toFixed: toFixedShim }, hasToFixedBugs);
-
-    var hasToPrecisionUndefinedBug = (function () {
-        try {
-            return Number("1.0").toPrecision(undefined) === '1';
-        } catch (e) {
-            return true;
-        }
-    }());
-    var originalToPrecision = NumberPrototype.toPrecision;
-    defineProperties(NumberPrototype, {
-        toPrecision: function toPrecision(precision) {
-            return typeof precision === 'undefined' ? originalToPrecision.call(this) : originalToPrecision.call(this, precision);
-        }
-    }, hasToPrecisionUndefinedBug);
-
-    //
-    // String
-    // ======
-    //
-
-    // ES5 15.5.4.14
-    // http://es5.github.com/#x15.5.4.14
-
-    // [bugfix, IE lt 9, firefox 4, Konqueror, Opera, obscure browsers]
-    // Many browsers do not split properly with regular expressions or they
-    // do not perform the split correctly under obscure conditions.
-    // See http://blog.stevenlevithan.com/archives/cross-browser-split
-    // I've tested in many browsers and this seems to cover the deviant ones:
-    //    'ab'.split(/(?:ab)*/) should be ["", ""], not [""]
-    //    '.'.split(/(.?)(.?)/) should be ["", ".", "", ""], not ["", ""]
-    //    'tesst'.split(/(s)*/) should be ["t", undefined, "e", "s", "t"], not
-    //       [undefined, "t", undefined, "e", ...]
-    //    ''.split(/.?/) should be [], not [""]
-    //    '.'.split(/()()/) should be ["."], not ["", "", "."]
-
-    if (
-        'ab'.split(/(?:ab)*/).length !== 2 ||
-        '.'.split(/(.?)(.?)/).length !== 4 ||
-        'tesst'.split(/(s)*/)[1] === 't' ||
-        'test'.split(/(?:)/, -1).length !== 4 ||
-        ''.split(/.?/).length ||
-        '.'.split(/()()/).length > 1
-    ) {
-        (function () {
-            var compliantExecNpcg = typeof (/()??/).exec('')[1] === 'undefined'; // NPCG: nonparticipating capturing group
-            var maxSafe32BitInt = Math.pow(2, 32) - 1;
-
-            StringPrototype.split = function (separator, limit) {
-                var string = String(this);
-                if (typeof separator === 'undefined' && limit === 0) {
-                    return [];
-                }
-
-                // If `separator` is not a regex, use native split
-                if (!isRegex(separator)) {
-                    return strSplit(this, separator, limit);
-                }
-
-                var output = [];
-                var flags = (separator.ignoreCase ? 'i' : '') +
-                            (separator.multiline ? 'm' : '') +
-                            (separator.unicode ? 'u' : '') + // in ES6
-                            (separator.sticky ? 'y' : ''), // Firefox 3+ and ES6
-                    lastLastIndex = 0,
-                    // Make `global` and avoid `lastIndex` issues by working with a copy
-                    separator2, match, lastIndex, lastLength;
-                var separatorCopy = new RegExp(separator.source, flags + 'g');
-                if (!compliantExecNpcg) {
-                    // Doesn't need flags gy, but they don't hurt
-                    separator2 = new RegExp('^' + separatorCopy.source + '$(?!\\s)', flags);
-                }
-                /* Values for `limit`, per the spec:
-                 * If undefined: 4294967295 // maxSafe32BitInt
-                 * If 0, Infinity, or NaN: 0
-                 * If positive number: limit = Math.floor(limit); if (limit > 4294967295) limit -= 4294967296;
-                 * If negative number: 4294967296 - Math.floor(Math.abs(limit))
-                 * If other: Type-convert, then use the above rules
-                 */
-                var splitLimit = typeof limit === 'undefined' ? maxSafe32BitInt : ES.ToUint32(limit);
-                match = separatorCopy.exec(string);
-                while (match) {
-                    // `separatorCopy.lastIndex` is not reliable cross-browser
-                    lastIndex = match.index + match[0].length;
-                    if (lastIndex > lastLastIndex) {
-                        pushCall(output, strSlice(string, lastLastIndex, match.index));
-                        // Fix browsers whose `exec` methods don't consistently return `undefined` for
-                        // nonparticipating capturing groups
-                        if (!compliantExecNpcg && match.length > 1) {
-                            /* eslint-disable no-loop-func */
-                            match[0].replace(separator2, function () {
-                                for (var i = 1; i < arguments.length - 2; i++) {
-                                    if (typeof arguments[i] === 'undefined') {
-                                        match[i] = void 0;
-                                    }
-                                }
-                            });
-                            /* eslint-enable no-loop-func */
-                        }
-                        if (match.length > 1 && match.index < string.length) {
-                            array_push.apply(output, arraySlice(match, 1));
-                        }
-                        lastLength = match[0].length;
-                        lastLastIndex = lastIndex;
-                        if (output.length >= splitLimit) {
-                            break;
-                        }
-                    }
-                    if (separatorCopy.lastIndex === match.index) {
-                        separatorCopy.lastIndex++; // Avoid an infinite loop
-                    }
-                    match = separatorCopy.exec(string);
-                }
-                if (lastLastIndex === string.length) {
-                    if (lastLength || !separatorCopy.test('')) {
-                        pushCall(output, '');
-                    }
-                } else {
-                    pushCall(output, strSlice(string, lastLastIndex));
-                }
-                return output.length > splitLimit ? arraySlice(output, 0, splitLimit) : output;
-            };
-        }());
-
-    // [bugfix, chrome]
-    // If separator is undefined, then the result array contains just one String,
-    // which is the this value (converted to a String). If limit is not undefined,
-    // then the output array is truncated so that it contains no more than limit
-    // elements.
-    // "0".split(undefined, 0) -> []
-    } else if ('0'.split(void 0, 0).length) {
-        StringPrototype.split = function split(separator, limit) {
-            if (typeof separator === 'undefined' && limit === 0) {
-                return [];
+          // No bugs detected; use the standard `for...in` algorithm.
+          forOwn = function (object, callback) {
+            var isFunction = getClass.call(object) == functionClass, property, isConstructor;
+            for (property in object) {
+              if (!(isFunction && property == "prototype") && isProperty.call(object, property) && !(isConstructor = property === "constructor")) {
+                callback(property);
+              }
             }
-            return strSplit(this, separator, limit);
+            // Manually invoke the callback for the `constructor` property due to
+            // cross-environment inconsistencies.
+            if (isConstructor || isProperty.call(object, (property = "constructor"))) {
+              callback(property);
+            }
+          };
+        }
+        return forOwn(object, callback);
+      };
+
+      // Public: Serializes a JavaScript `value` as a JSON string. The optional
+      // `filter` argument may specify either a function that alters how object and
+      // array members are serialized, or an array of strings and numbers that
+      // indicates which properties should be serialized. The optional `width`
+      // argument may be either a string or number that specifies the indentation
+      // level of the output.
+      if (!has("json-stringify") && !has("date-serialization")) {
+        // Internal: A map of control characters and their escaped equivalents.
+        var Escapes = {
+          92: "\\\\",
+          34: '\\"',
+          8: "\\b",
+          12: "\\f",
+          10: "\\n",
+          13: "\\r",
+          9: "\\t"
         };
-    }
 
-    var str_replace = StringPrototype.replace;
-    var replaceReportsGroupsCorrectly = (function () {
-        var groups = [];
-        'x'.replace(/x(.)?/g, function (match, group) {
-            pushCall(groups, group);
-        });
-        return groups.length === 1 && typeof groups[0] === 'undefined';
-    }());
+        // Internal: Converts `value` into a zero-padded string such that its
+        // length is at least equal to `width`. The `width` must be <= 6.
+        var leadingZeroes = "000000";
+        var toPaddedString = function (width, value) {
+          // The `|| 0` expression is necessary to work around a bug in
+          // Opera <= 7.54u2 where `0 == -0`, but `String(-0) !== "0"`.
+          return (leadingZeroes + (value || 0)).slice(-width);
+        };
 
-    if (!replaceReportsGroupsCorrectly) {
-        StringPrototype.replace = function replace(searchValue, replaceValue) {
-            var isFn = isCallable(replaceValue);
-            var hasCapturingGroups = isRegex(searchValue) && (/\)[*?]/).test(searchValue.source);
-            if (!isFn || !hasCapturingGroups) {
-                return str_replace.call(this, searchValue, replaceValue);
+        // Internal: Serializes a date object.
+        var serializeDate = function (value) {
+          var getData, year, month, date, time, hours, minutes, seconds, milliseconds;
+          // Define additional utility methods if the `Date` methods are buggy.
+          if (!isExtended) {
+            var floor = Math.floor;
+            // A mapping between the months of the year and the number of days between
+            // January 1st and the first of the respective month.
+            var Months = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+            // Internal: Calculates the number of days between the Unix epoch and the
+            // first day of the given month.
+            var getDay = function (year, month) {
+              return Months[month] + 365 * (year - 1970) + floor((year - 1969 + (month = +(month > 1))) / 4) - floor((year - 1901 + month) / 100) + floor((year - 1601 + month) / 400);
+            };
+            getData = function (value) {
+              // Manually compute the year, month, date, hours, minutes,
+              // seconds, and milliseconds if the `getUTC*` methods are
+              // buggy. Adapted from @Yaffle's `date-shim` project.
+              date = floor(value / 864e5);
+              for (year = floor(date / 365.2425) + 1970 - 1; getDay(year + 1, 0) <= date; year++);
+              for (month = floor((date - getDay(year, 0)) / 30.42); getDay(year, month + 1) <= date; month++);
+              date = 1 + date - getDay(year, month);
+              // The `time` value specifies the time within the day (see ES
+              // 5.1 section 15.9.1.2). The formula `(A % B + B) % B` is used
+              // to compute `A modulo B`, as the `%` operator does not
+              // correspond to the `modulo` operation for negative numbers.
+              time = (value % 864e5 + 864e5) % 864e5;
+              // The hours, minutes, seconds, and milliseconds are obtained by
+              // decomposing the time within the day. See section 15.9.1.10.
+              hours = floor(time / 36e5) % 24;
+              minutes = floor(time / 6e4) % 60;
+              seconds = floor(time / 1e3) % 60;
+              milliseconds = time % 1e3;
+            };
+          } else {
+            getData = function (value) {
+              year = value.getUTCFullYear();
+              month = value.getUTCMonth();
+              date = value.getUTCDate();
+              hours = value.getUTCHours();
+              minutes = value.getUTCMinutes();
+              seconds = value.getUTCSeconds();
+              milliseconds = value.getUTCMilliseconds();
+            };
+          }
+          serializeDate = function (value) {
+            if (value > -1 / 0 && value < 1 / 0) {
+              // Dates are serialized according to the `Date#toJSON` method
+              // specified in ES 5.1 section 15.9.5.44. See section 15.9.1.15
+              // for the ISO 8601 date time string format.
+              getData(value);
+              // Serialize extended years correctly.
+              value = (year <= 0 || year >= 1e4 ? (year < 0 ? "-" : "+") + toPaddedString(6, year < 0 ? -year : year) : toPaddedString(4, year)) +
+              "-" + toPaddedString(2, month + 1) + "-" + toPaddedString(2, date) +
+              // Months, dates, hours, minutes, and seconds should have two
+              // digits; milliseconds should have three.
+              "T" + toPaddedString(2, hours) + ":" + toPaddedString(2, minutes) + ":" + toPaddedString(2, seconds) +
+              // Milliseconds are optional in ES 5.0, but required in 5.1.
+              "." + toPaddedString(3, milliseconds) + "Z";
+              year = month = date = hours = minutes = seconds = milliseconds = null;
             } else {
-                var wrappedReplaceValue = function (match) {
-                    var length = arguments.length;
-                    var originalLastIndex = searchValue.lastIndex;
-                    searchValue.lastIndex = 0;
-                    var args = searchValue.exec(match) || [];
-                    searchValue.lastIndex = originalLastIndex;
-                    pushCall(args, arguments[length - 2], arguments[length - 1]);
-                    return replaceValue.apply(this, args);
-                };
-                return str_replace.call(this, searchValue, wrappedReplaceValue);
+              value = null;
             }
+            return value;
+          };
+          return serializeDate(value);
         };
-    }
 
-    // ECMA-262, 3rd B.2.3
-    // Not an ECMAScript standard, although ECMAScript 3rd Edition has a
-    // non-normative section suggesting uniform semantics and it should be
-    // normalized across all browsers
-    // [bugfix, IE lt 9] IE < 9 substr() with negative value not working in IE
-    var string_substr = StringPrototype.substr;
-    var hasNegativeSubstrBug = ''.substr && '0b'.substr(-1) !== 'b';
-    defineProperties(StringPrototype, {
-        substr: function substr(start, length) {
-            var normalizedStart = start;
-            if (start < 0) {
-                normalizedStart = max(this.length + start, 0);
-            }
-            return string_substr.call(this, normalizedStart, length);
-        }
-    }, hasNegativeSubstrBug);
+        // For environments with `JSON.stringify` but buggy date serialization,
+        // we override the native `Date#toJSON` implementation with a
+        // spec-compliant one.
+        if (has("json-stringify") && !has("date-serialization")) {
+          // Internal: the `Date#toJSON` implementation used to override the native one.
+          function dateToJSON (key) {
+            return serializeDate(this);
+          }
 
-    // ES5 15.5.4.20
-    // whitespace from: http://es5.github.io/#x15.5.4.20
-    var ws = '\x09\x0A\x0B\x0C\x0D\x20\xA0\u1680\u180E\u2000\u2001\u2002\u2003' +
-        '\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000\u2028' +
-        '\u2029\uFEFF';
-    var zeroWidth = '\u200b';
-    var wsRegexChars = '[' + ws + ']';
-    var trimBeginRegexp = new RegExp('^' + wsRegexChars + wsRegexChars + '*');
-    var trimEndRegexp = new RegExp(wsRegexChars + wsRegexChars + '*$');
-    var hasTrimWhitespaceBug = StringPrototype.trim && (ws.trim() || !zeroWidth.trim());
-    defineProperties(StringPrototype, {
-        // http://blog.stevenlevithan.com/archives/faster-trim-javascript
-        // http://perfectionkills.com/whitespace-deviations/
-        trim: function trim() {
-            if (typeof this === 'undefined' || this === null) {
-                throw new TypeError("can't convert " + this + ' to object');
+          // Public: `JSON.stringify`. See ES 5.1 section 15.12.3.
+          var nativeStringify = exports.stringify;
+          exports.stringify = function (source, filter, width) {
+            var nativeToJSON = Date.prototype.toJSON;
+            Date.prototype.toJSON = dateToJSON;
+            var result = nativeStringify(source, filter, width);
+            Date.prototype.toJSON = nativeToJSON;
+            return result;
+          }
+        } else {
+          // Internal: Double-quotes a string `value`, replacing all ASCII control
+          // characters (characters with code unit values between 0 and 31) with
+          // their escaped equivalents. This is an implementation of the
+          // `Quote(value)` operation defined in ES 5.1 section 15.12.3.
+          var unicodePrefix = "\\u00";
+          var escapeChar = function (character) {
+            var charCode = character.charCodeAt(0), escaped = Escapes[charCode];
+            if (escaped) {
+              return escaped;
             }
-            return $String(this).replace(trimBeginRegexp, '').replace(trimEndRegexp, '');
-        }
-    }, hasTrimWhitespaceBug);
-    var trim = call.bind(String.prototype.trim);
+            return unicodePrefix + toPaddedString(2, charCode.toString(16));
+          };
+          var reEscape = /[\x00-\x1f\x22\x5c]/g;
+          var quote = function (value) {
+            reEscape.lastIndex = 0;
+            return '"' +
+              (
+                reEscape.test(value)
+                  ? value.replace(reEscape, escapeChar)
+                  : value
+              ) +
+              '"';
+          };
 
-    var hasLastIndexBug = StringPrototype.lastIndexOf && 'abcあい'.lastIndexOf('あい', 2) !== -1;
-    defineProperties(StringPrototype, {
-        lastIndexOf: function lastIndexOf(searchString) {
-            if (typeof this === 'undefined' || this === null) {
-                throw new TypeError("can't convert " + this + ' to object');
+          // Internal: Recursively serializes an object. Implements the
+          // `Str(key, holder)`, `JO(value)`, and `JA(value)` operations.
+          var serialize = function (property, object, callback, properties, whitespace, indentation, stack) {
+            var value, type, className, results, element, index, length, prefix, result;
+            attempt(function () {
+              // Necessary for host object support.
+              value = object[property];
+            });
+            if (typeof value == "object" && value) {
+              if (value.getUTCFullYear && getClass.call(value) == dateClass && value.toJSON === Date.prototype.toJSON) {
+                value = serializeDate(value);
+              } else if (typeof value.toJSON == "function") {
+                value = value.toJSON(property);
+              }
             }
-            var S = $String(this);
-            var searchStr = $String(searchString);
-            var numPos = arguments.length > 1 ? $Number(arguments[1]) : NaN;
-            var pos = isActualNaN(numPos) ? Infinity : ES.ToInteger(numPos);
-            var start = min(max(pos, 0), S.length);
-            var searchLen = searchStr.length;
-            var k = start + searchLen;
-            while (k > 0) {
-                k = max(0, k - searchLen);
-                var index = strIndexOf(strSlice(S, k, start + searchLen), searchStr);
-                if (index !== -1) {
-                    return k + index;
+            if (callback) {
+              // If a replacement function was provided, call it to obtain the value
+              // for serialization.
+              value = callback.call(object, property, value);
+            }
+            // Exit early if value is `undefined` or `null`.
+            if (value == undefined) {
+              return value === undefined ? value : "null";
+            }
+            type = typeof value;
+            // Only call `getClass` if the value is an object.
+            if (type == "object") {
+              className = getClass.call(value);
+            }
+            switch (className || type) {
+              case "boolean":
+              case booleanClass:
+                // Booleans are represented literally.
+                return "" + value;
+              case "number":
+              case numberClass:
+                // JSON numbers must be finite. `Infinity` and `NaN` are serialized as
+                // `"null"`.
+                return value > -1 / 0 && value < 1 / 0 ? "" + value : "null";
+              case "string":
+              case stringClass:
+                // Strings are double-quoted and escaped.
+                return quote("" + value);
+            }
+            // Recursively serialize objects and arrays.
+            if (typeof value == "object") {
+              // Check for cyclic structures. This is a linear search; performance
+              // is inversely proportional to the number of unique nested objects.
+              for (length = stack.length; length--;) {
+                if (stack[length] === value) {
+                  // Cyclic structures cannot be serialized by `JSON.stringify`.
+                  // throw TypeError();
+                  // instead let's just pass the error as value and not explode ok?
+                  value = TypeError();
                 }
-            }
-            return -1;
-        }
-    }, hasLastIndexBug);
-
-    var originalLastIndexOf = StringPrototype.lastIndexOf;
-    defineProperties(StringPrototype, {
-        lastIndexOf: function lastIndexOf(searchString) {
-            return originalLastIndexOf.apply(this, arguments);
-        }
-    }, StringPrototype.lastIndexOf.length !== 1);
-
-    // ES-5 15.1.2.2
-    /* eslint-disable radix */
-    if (parseInt(ws + '08') !== 8 || parseInt(ws + '0x16') !== 22) {
-    /* eslint-enable radix */
-        /* global parseInt: true */
-        parseInt = (function (origParseInt) {
-            var hexRegex = /^[\-+]?0[xX]/;
-            return function parseInt(str, radix) {
-                var string = trim(String(str));
-                var defaultedRadix = $Number(radix) || (hexRegex.test(string) ? 16 : 10);
-                return origParseInt(string, defaultedRadix);
-            };
-        }(parseInt));
-    }
-
-    // https://es5.github.io/#x15.1.2.3
-    if (1 / parseFloat('-0') !== -Infinity) {
-        /* global parseFloat: true */
-        parseFloat = (function (origParseFloat) {
-            return function parseFloat(string) {
-                var inputString = trim(String(string));
-                var result = origParseFloat(inputString);
-                return result === 0 && strSlice(inputString, 0, 1) === '-' ? -0 : result;
-            };
-        }(parseFloat));
-    }
-
-    if (String(new RangeError('test')) !== 'RangeError: test') {
-        var errorToStringShim = function toString() {
-            if (typeof this === 'undefined' || this === null) {
-                throw new TypeError("can't convert " + this + ' to object');
-            }
-            var name = this.name;
-            if (typeof name === 'undefined') {
-                name = 'Error';
-            } else if (typeof name !== 'string') {
-                name = $String(name);
-            }
-            var msg = this.message;
-            if (typeof msg === 'undefined') {
-                msg = '';
-            } else if (typeof msg !== 'string') {
-                msg = $String(msg);
-            }
-            if (!name) {
-                return msg;
-            }
-            if (!msg) {
-                return name;
-            }
-            return name + ': ' + msg;
-        };
-        // can't use defineProperties here because of toString enumeration issue in IE <= 8
-        Error.prototype.toString = errorToStringShim;
-    }
-
-    if (supportsDescriptors) {
-        var ensureNonEnumerable = function (obj, prop) {
-            if (isEnum(obj, prop)) {
-                var desc = Object.getOwnPropertyDescriptor(obj, prop);
-                if (desc.configurable) {
-                    desc.enumerable = false;
-                    Object.defineProperty(obj, prop, desc);
+              }
+              // Add the object to the stack of traversed objects.
+              stack.push(value);
+              results = [];
+              // Save the current indentation level and indent one additional level.
+              prefix = indentation;
+              indentation += whitespace;
+              if (className == arrayClass) {
+                // Recursively serialize array elements.
+                for (index = 0, length = value.length; index < length; index++) {
+                  element = serialize(index, value, callback, properties, whitespace, indentation, stack);
+                  results.push(element === undefined ? "null" : element);
                 }
+                result = results.length ? (whitespace ? "[\n" + indentation + results.join(",\n" + indentation) + "\n" + prefix + "]" : ("[" + results.join(",") + "]")) : "[]";
+              } else {
+                // Recursively serialize object members. Members are selected from
+                // either a user-specified list of property names, or the object
+                // itself.
+                forOwn(properties || value, function (property) {
+                  var element = serialize(property, value, callback, properties, whitespace, indentation, stack);
+                  if (element !== undefined) {
+                    // According to ES 5.1 section 15.12.3: "If `gap` {whitespace}
+                    // is not the empty string, let `member` {quote(property) + ":"}
+                    // be the concatenation of `member` and the `space` character."
+                    // The "`space` character" refers to the literal space
+                    // character, not the `space` {width} argument provided to
+                    // `JSON.stringify`.
+                    results.push(quote(property) + ":" + (whitespace ? " " : "") + element);
+                  }
+                });
+                result = results.length ? (whitespace ? "{\n" + indentation + results.join(",\n" + indentation) + "\n" + prefix + "}" : ("{" + results.join(",") + "}")) : "{}";
+              }
+              // Remove the object from the traversed object stack.
+              stack.pop();
+              return result;
             }
-        };
-        ensureNonEnumerable(Error.prototype, 'message');
-        if (Error.prototype.message !== '') {
-            Error.prototype.message = '';
+          };
+
+          // Public: `JSON.stringify`. See ES 5.1 section 15.12.3.
+          exports.stringify = function (source, filter, width) {
+            var whitespace, callback, properties, className;
+            if (objectTypes[typeof filter] && filter) {
+              className = getClass.call(filter);
+              if (className == functionClass) {
+                callback = filter;
+              } else if (className == arrayClass) {
+                // Convert the property names array into a makeshift set.
+                properties = {};
+                for (var index = 0, length = filter.length, value; index < length;) {
+                  value = filter[index++];
+                  className = getClass.call(value);
+                  if (className == "[object String]" || className == "[object Number]") {
+                    properties[value] = 1;
+                  }
+                }
+              }
+            }
+            if (width) {
+              className = getClass.call(width);
+              if (className == numberClass) {
+                // Convert the `width` to an integer and create a string containing
+                // `width` number of space characters.
+                if ((width -= width % 1) > 0) {
+                  if (width > 10) {
+                    width = 10;
+                  }
+                  for (whitespace = ""; whitespace.length < width;) {
+                    whitespace += " ";
+                  }
+                }
+              } else if (className == stringClass) {
+                whitespace = width.length <= 10 ? width : width.slice(0, 10);
+              }
+            }
+            // Opera <= 7.54u2 discards the values associated with empty string keys
+            // (`""`) only if they are used directly within an object member list
+            // (e.g., `!("" in { "": 1})`).
+            return serialize("", (value = {}, value[""] = source, value), callback, properties, whitespace, "", []);
+          };
         }
-        ensureNonEnumerable(Error.prototype, 'name');
+      }
+
+      // Public: Parses a JSON source string.
+      if (!has("json-parse")) {
+        var fromCharCode = String.fromCharCode;
+
+        // Internal: A map of escaped control characters and their unescaped
+        // equivalents.
+        var Unescapes = {
+          92: "\\",
+          34: '"',
+          47: "/",
+          98: "\b",
+          116: "\t",
+          110: "\n",
+          102: "\f",
+          114: "\r"
+        };
+
+        // Internal: Stores the parser state.
+        var Index, Source;
+
+        // Internal: Resets the parser state and throws a `SyntaxError`.
+        var abort = function () {
+          Index = Source = null;
+          throw SyntaxError();
+        };
+
+        // Internal: Returns the next token, or `"$"` if the parser has reached
+        // the end of the source string. A token may be a string, number, `null`
+        // literal, or Boolean literal.
+        var lex = function () {
+          var source = Source, length = source.length, value, begin, position, isSigned, charCode;
+          while (Index < length) {
+            charCode = source.charCodeAt(Index);
+            switch (charCode) {
+              case 9: case 10: case 13: case 32:
+                // Skip whitespace tokens, including tabs, carriage returns, line
+                // feeds, and space characters.
+                Index++;
+                break;
+              case 123: case 125: case 91: case 93: case 58: case 44:
+                // Parse a punctuator token (`{`, `}`, `[`, `]`, `:`, or `,`) at
+                // the current position.
+                value = charIndexBuggy ? source.charAt(Index) : source[Index];
+                Index++;
+                return value;
+              case 34:
+                // `"` delimits a JSON string; advance to the next character and
+                // begin parsing the string. String tokens are prefixed with the
+                // sentinel `@` character to distinguish them from punctuators and
+                // end-of-string tokens.
+                for (value = "@", Index++; Index < length;) {
+                  charCode = source.charCodeAt(Index);
+                  if (charCode < 32) {
+                    // Unescaped ASCII control characters (those with a code unit
+                    // less than the space character) are not permitted.
+                    abort();
+                  } else if (charCode == 92) {
+                    // A reverse solidus (`\`) marks the beginning of an escaped
+                    // control character (including `"`, `\`, and `/`) or Unicode
+                    // escape sequence.
+                    charCode = source.charCodeAt(++Index);
+                    switch (charCode) {
+                      case 92: case 34: case 47: case 98: case 116: case 110: case 102: case 114:
+                        // Revive escaped control characters.
+                        value += Unescapes[charCode];
+                        Index++;
+                        break;
+                      case 117:
+                        // `\u` marks the beginning of a Unicode escape sequence.
+                        // Advance to the first character and validate the
+                        // four-digit code point.
+                        begin = ++Index;
+                        for (position = Index + 4; Index < position; Index++) {
+                          charCode = source.charCodeAt(Index);
+                          // A valid sequence comprises four hexdigits (case-
+                          // insensitive) that form a single hexadecimal value.
+                          if (!(charCode >= 48 && charCode <= 57 || charCode >= 97 && charCode <= 102 || charCode >= 65 && charCode <= 70)) {
+                            // Invalid Unicode escape sequence.
+                            abort();
+                          }
+                        }
+                        // Revive the escaped character.
+                        value += fromCharCode("0x" + source.slice(begin, Index));
+                        break;
+                      default:
+                        // Invalid escape sequence.
+                        abort();
+                    }
+                  } else {
+                    if (charCode == 34) {
+                      // An unescaped double-quote character marks the end of the
+                      // string.
+                      break;
+                    }
+                    charCode = source.charCodeAt(Index);
+                    begin = Index;
+                    // Optimize for the common case where a string is valid.
+                    while (charCode >= 32 && charCode != 92 && charCode != 34) {
+                      charCode = source.charCodeAt(++Index);
+                    }
+                    // Append the string as-is.
+                    value += source.slice(begin, Index);
+                  }
+                }
+                if (source.charCodeAt(Index) == 34) {
+                  // Advance to the next character and return the revived string.
+                  Index++;
+                  return value;
+                }
+                // Unterminated string.
+                abort();
+              default:
+                // Parse numbers and literals.
+                begin = Index;
+                // Advance past the negative sign, if one is specified.
+                if (charCode == 45) {
+                  isSigned = true;
+                  charCode = source.charCodeAt(++Index);
+                }
+                // Parse an integer or floating-point value.
+                if (charCode >= 48 && charCode <= 57) {
+                  // Leading zeroes are interpreted as octal literals.
+                  if (charCode == 48 && ((charCode = source.charCodeAt(Index + 1)), charCode >= 48 && charCode <= 57)) {
+                    // Illegal octal literal.
+                    abort();
+                  }
+                  isSigned = false;
+                  // Parse the integer component.
+                  for (; Index < length && ((charCode = source.charCodeAt(Index)), charCode >= 48 && charCode <= 57); Index++);
+                  // Floats cannot contain a leading decimal point; however, this
+                  // case is already accounted for by the parser.
+                  if (source.charCodeAt(Index) == 46) {
+                    position = ++Index;
+                    // Parse the decimal component.
+                    for (; position < length; position++) {
+                      charCode = source.charCodeAt(position);
+                      if (charCode < 48 || charCode > 57) {
+                        break;
+                      }
+                    }
+                    if (position == Index) {
+                      // Illegal trailing decimal.
+                      abort();
+                    }
+                    Index = position;
+                  }
+                  // Parse exponents. The `e` denoting the exponent is
+                  // case-insensitive.
+                  charCode = source.charCodeAt(Index);
+                  if (charCode == 101 || charCode == 69) {
+                    charCode = source.charCodeAt(++Index);
+                    // Skip past the sign following the exponent, if one is
+                    // specified.
+                    if (charCode == 43 || charCode == 45) {
+                      Index++;
+                    }
+                    // Parse the exponential component.
+                    for (position = Index; position < length; position++) {
+                      charCode = source.charCodeAt(position);
+                      if (charCode < 48 || charCode > 57) {
+                        break;
+                      }
+                    }
+                    if (position == Index) {
+                      // Illegal empty exponent.
+                      abort();
+                    }
+                    Index = position;
+                  }
+                  // Coerce the parsed value to a JavaScript number.
+                  return +source.slice(begin, Index);
+                }
+                // A negative sign may only precede numbers.
+                if (isSigned) {
+                  abort();
+                }
+                // `true`, `false`, and `null` literals.
+                var temp = source.slice(Index, Index + 4);
+                if (temp == "true") {
+                  Index += 4;
+                  return true;
+                } else if (temp == "fals" && source.charCodeAt(Index + 4 ) == 101) {
+                  Index += 5;
+                  return false;
+                } else if (temp == "null") {
+                  Index += 4;
+                  return null;
+                }
+                // Unrecognized token.
+                abort();
+            }
+          }
+          // Return the sentinel `$` character if the parser has reached the end
+          // of the source string.
+          return "$";
+        };
+
+        // Internal: Parses a JSON `value` token.
+        var get = function (value) {
+          var results, hasMembers;
+          if (value == "$") {
+            // Unexpected end of input.
+            abort();
+          }
+          if (typeof value == "string") {
+            if ((charIndexBuggy ? value.charAt(0) : value[0]) == "@") {
+              // Remove the sentinel `@` character.
+              return value.slice(1);
+            }
+            // Parse object and array literals.
+            if (value == "[") {
+              // Parses a JSON array, returning a new JavaScript array.
+              results = [];
+              for (;;) {
+                value = lex();
+                // A closing square bracket marks the end of the array literal.
+                if (value == "]") {
+                  break;
+                }
+                // If the array literal contains elements, the current token
+                // should be a comma separating the previous element from the
+                // next.
+                if (hasMembers) {
+                  if (value == ",") {
+                    value = lex();
+                    if (value == "]") {
+                      // Unexpected trailing `,` in array literal.
+                      abort();
+                    }
+                  } else {
+                    // A `,` must separate each array element.
+                    abort();
+                  }
+                } else {
+                  hasMembers = true;
+                }
+                // Elisions and leading commas are not permitted.
+                if (value == ",") {
+                  abort();
+                }
+                results.push(get(value));
+              }
+              return results;
+            } else if (value == "{") {
+              // Parses a JSON object, returning a new JavaScript object.
+              results = {};
+              for (;;) {
+                value = lex();
+                // A closing curly brace marks the end of the object literal.
+                if (value == "}") {
+                  break;
+                }
+                // If the object literal contains members, the current token
+                // should be a comma separator.
+                if (hasMembers) {
+                  if (value == ",") {
+                    value = lex();
+                    if (value == "}") {
+                      // Unexpected trailing `,` in object literal.
+                      abort();
+                    }
+                  } else {
+                    // A `,` must separate each object member.
+                    abort();
+                  }
+                } else {
+                  hasMembers = true;
+                }
+                // Leading commas are not permitted, object property names must be
+                // double-quoted strings, and a `:` must separate each property
+                // name and value.
+                if (value == "," || typeof value != "string" || (charIndexBuggy ? value.charAt(0) : value[0]) != "@" || lex() != ":") {
+                  abort();
+                }
+                results[value.slice(1)] = get(lex());
+              }
+              return results;
+            }
+            // Unexpected token encountered.
+            abort();
+          }
+          return value;
+        };
+
+        // Internal: Updates a traversed object member.
+        var update = function (source, property, callback) {
+          var element = walk(source, property, callback);
+          if (element === undefined) {
+            delete source[property];
+          } else {
+            source[property] = element;
+          }
+        };
+
+        // Internal: Recursively traverses a parsed JSON object, invoking the
+        // `callback` function for each value. This is an implementation of the
+        // `Walk(holder, name)` operation defined in ES 5.1 section 15.12.2.
+        var walk = function (source, property, callback) {
+          var value = source[property], length;
+          if (typeof value == "object" && value) {
+            // `forOwn` can't be used to traverse an array in Opera <= 8.54
+            // because its `Object#hasOwnProperty` implementation returns `false`
+            // for array indices (e.g., `![1, 2, 3].hasOwnProperty("0")`).
+            if (getClass.call(value) == arrayClass) {
+              for (length = value.length; length--;) {
+                update(getClass, forOwn, value, length, callback);
+              }
+            } else {
+              forOwn(value, function (property) {
+                update(value, property, callback);
+              });
+            }
+          }
+          return callback.call(source, property, value);
+        };
+
+        // Public: `JSON.parse`. See ES 5.1 section 15.12.2.
+        exports.parse = function (source, callback) {
+          var result, value;
+          Index = 0;
+          Source = "" + source;
+          result = get(lex());
+          // If a JSON string contains multiple tokens, it is invalid.
+          if (lex() != "$") {
+            abort();
+          }
+          // Reset the parser state.
+          Index = Source = null;
+          return callback && getClass.call(callback) == functionClass ? walk((value = {}, value[""] = result, value), "", callback) : result;
+        };
+      }
     }
 
-    if (String(/a/mig) !== '/a/gim') {
-        var regexToString = function toString() {
-            var str = '/' + this.source + '/';
-            if (this.global) {
-                str += 'g';
-            }
-            if (this.ignoreCase) {
-                str += 'i';
-            }
-            if (this.multiline) {
-                str += 'm';
-            }
-            return str;
-        };
-        // can't use defineProperties here because of toString enumeration issue in IE <= 8
-        RegExp.prototype.toString = regexToString;
-    }
-}));
+    exports.runInContext = runInContext;
+    return exports;
+  }
+
+  if (freeExports && !isLoader) {
+    // Export for CommonJS environments.
+    runInContext(root, freeExports);
+  } else {
+    // Export for web browsers and JavaScript engines.
+    var nativeJSON = root.JSON,
+        previousJSON = root.JSON3,
+        isRestored = false;
+
+    var JSON3 = runInContext(root, (root.JSON3 = {
+      // Public: Restores the original value of the global `JSON` object and
+      // returns a reference to the `JSON3` object.
+      "noConflict": function () {
+        if (!isRestored) {
+          isRestored = true;
+          root.JSON = nativeJSON;
+          root.JSON3 = previousJSON;
+          nativeJSON = previousJSON = null;
+        }
+        return JSON3;
+      }
+    }));
+
+    root.JSON = {
+      "parse": JSON3.parse,
+      "stringify": JSON3.stringify
+    };
+  }
+
+  // Export for asynchronous module loaders.
+  if (isLoader) {
+    define(function () {
+      return JSON3;
+    });
+  }
+}).call(this);
 
 // Log and Console.log objects
 if ($ && $.global) {
@@ -2123,16 +1841,19 @@ if (!String.prototype.repeat) {
     if (str.length == 0 || count == 0) {
       return '';
     }
-    // Ensuring count is a 31-bit integer allows us to heavily optimize the
-    // main part. But anyway, most current (August 2014) browsers can't handle
-    // strings 1 << 28 chars or longer, so:
-    if (str.length * count >= (1 << 28)) {
-      throw new RangeError('repeat count must not overflow maximum string size');
-    }
-    while (count >>= 1) { // shift it by multiple of 2 because this is binary summation of series
-       str += str; // binary summation
-    }
-    str += str.substring(0, str.length * count - str.length);
+    // // Ensuring count is a 31-bit integer allows us to heavily optimize the
+    // // main part. But anyway, most current (August 2014) browsers can't handle
+    // // strings 1 << 28 chars or longer, so:
+    // if (str.length * count >= (1 << 28)) {
+    //   throw new RangeError('repeat count must not overflow maximum string size');
+    // }
+    // while (count >>= 1) { // shift it by multiple of 2 because this is binary summation of series
+    //    str += str; // binary summation
+    // }
+    // str += str.substring(0, str.length * count - str.length);
+
+    // above doesn't work on cranky es3 photoshop for some reason.
+    str = Array(count+1).join(str);
     return str;
   };
 }
@@ -2170,533 +1891,58 @@ if (!String.prototype.padEnd) {
     };
 }
 
-/*
-    json2.js
-    2015-05-03
+//Arrays
+// https://tc39.github.io/ecma262/#sec-array.prototype.includes
+if (!Array.prototype.includes) {
+    Array.prototype.includes = function(searchElement, fromIndex) {
+        if (this == null) {
+            throw new TypeError('"this" is null or not defined');
+        }
 
-    Public Domain.
+        // 1. Let O be ? ToObject(this value).
+        var o = Object(this);
 
-    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+        // 2. Let len be ? ToLength(? Get(O, "length")).
+        var len = o.length >>> 0;
 
-    See http://www.JSON.org/js.html
+        // 3. If len is 0, return false.
+        if (len === 0) {
+            return false;
+        }
 
+        // 4. Let n be ? ToInteger(fromIndex).
+        //    (If fromIndex is undefined, this step produces the value 0.)
+        var n = fromIndex | 0;
 
-    This code should be minified before deployment.
-    See http://javascript.crockford.com/jsmin.html
+        // 5. If n ≥ 0, then
+        //  a. Let k be n.
+        // 6. Else n < 0,
+        //  a. Let k be len + n.
+        //  b. If k < 0, let k be 0.
+        var k = Math.max(n >= 0 ? n : len - Math.abs(n), 0);
 
-    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
-    NOT CONTROL.
-
-
-    This file creates a global JSON object containing two methods: stringify
-    and parse. This file is provides the ES5 JSON capability to ES3 systems.
-    If a project might run on IE8 or earlier, then this file should be included.
-    This file does nothing on ES5 systems.
-
-        JSON.stringify(value, replacer, space)
-            value       any JavaScript value, usually an object or array.
-
-            replacer    an optional parameter that determines how object
-                        values are stringified for objects. It can be a
-                        function or an array of strings.
-
-            space       an optional parameter that specifies the indentation
-                        of nested structures. If it is omitted, the text will
-                        be packed without extra whitespace. If it is a number,
-                        it will specify the number of spaces to indent at each
-                        level. If it is a string (such as '\t' or '&nbsp;'),
-                        it contains the characters used to indent at each level.
-
-            This method produces a JSON text from a JavaScript value.
-
-            When an object value is found, if the object contains a toJSON
-            method, its toJSON method will be called and the result will be
-            stringified. A toJSON method does not serialize: it returns the
-            value represented by the name/value pair that should be serialized,
-            or undefined if nothing should be serialized. The toJSON method
-            will be passed the key associated with the value, and this will be
-            bound to the value
-
-            For example, this would serialize Dates as ISO strings.
-
-                Date.prototype.toJSON = function (key) {
-                    function f(n) {
-                        // Format integers to have at least two digits.
-                        return n < 10
-                            ? '0' + n
-                            : n;
-                    }
-
-                    return this.getUTCFullYear()   + '-' +
-                         f(this.getUTCMonth() + 1) + '-' +
-                         f(this.getUTCDate())      + 'T' +
-                         f(this.getUTCHours())     + ':' +
-                         f(this.getUTCMinutes())   + ':' +
-                         f(this.getUTCSeconds())   + 'Z';
-                };
-
-            You can provide an optional replacer method. It will be passed the
-            key and value of each member, with this bound to the containing
-            object. The value that is returned from your method will be
-            serialized. If your method returns undefined, then the member will
-            be excluded from the serialization.
-
-            If the replacer parameter is an array of strings, then it will be
-            used to select the members to be serialized. It filters the results
-            such that only members with keys listed in the replacer array are
-            stringified.
-
-            Values that do not have JSON representations, such as undefined or
-            functions, will not be serialized. Such values in objects will be
-            dropped; in arrays they will be replaced with null. You can use
-            a replacer function to replace those with JSON values.
-            JSON.stringify(undefined) returns undefined.
-
-            The optional space parameter produces a stringification of the
-            value that is filled with line breaks and indentation to make it
-            easier to read.
-
-            If the space parameter is a non-empty string, then that string will
-            be used for indentation. If the space parameter is a number, then
-            the indentation will be that many spaces.
-
-            Example:
-
-            text = JSON.stringify(['e', {pluribus: 'unum'}]);
-            // text is '["e",{"pluribus":"unum"}]'
-
-
-            text = JSON.stringify(['e', {pluribus: 'unum'}], null, '\t');
-            // text is '[\n\t"e",\n\t{\n\t\t"pluribus": "unum"\n\t}\n]'
-
-            text = JSON.stringify([new Date()], function (key, value) {
-                return this[key] instanceof Date
-                    ? 'Date(' + this[key] + ')'
-                    : value;
-            });
-            // text is '["Date(---current time---)"]'
-
-
-        JSON.parse(text, reviver)
-            This method parses a JSON text to produce an object or array.
-            It can throw a SyntaxError exception.
-
-            The optional reviver parameter is a function that can filter and
-            transform the results. It receives each of the keys and values,
-            and its return value is used instead of the original value.
-            If it returns what it received, then the structure is not modified.
-            If it returns undefined then the member is deleted.
-
-            Example:
-
-            // Parse the text. Values that look like ISO date strings will
-            // be converted to Date objects.
-
-            myData = JSON.parse(text, function (key, value) {
-                var a;
-                if (typeof value === 'string') {
-                    a =
-/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
-                    if (a) {
-                        return new Date(Date.UTC(+a[1], +a[2] - 1, +a[3], +a[4],
-                            +a[5], +a[6]));
-                    }
-                }
-                return value;
-            });
-
-            myData = JSON.parse('["Date(09/09/2001)"]', function (key, value) {
-                var d;
-                if (typeof value === 'string' &&
-                        value.slice(0, 5) === 'Date(' &&
-                        value.slice(-1) === ')') {
-                    d = new Date(value.slice(5, -1));
-                    if (d) {
-                        return d;
-                    }
-                }
-                return value;
-            });
-
-
-    This is a reference implementation. You are free to copy, modify, or
-    redistribute.
-*/
-
-/*jslint
-    eval, for, this
-*/
-
-/*property
-    JSON, apply, call, charCodeAt, getUTCDate, getUTCFullYear, getUTCHours,
-    getUTCMinutes, getUTCMonth, getUTCSeconds, hasOwnProperty, join,
-    lastIndex, length, parse, prototype, push, replace, slice, stringify,
-    test, toJSON, toString, valueOf
-*/
-
-
-// Create a JSON object only if one does not already exist. We create the
-// methods in a closure to avoid creating global variables.
-
-if (typeof JSON !== 'object') {
-    JSON = {};
+        function sameValueZero(x, y) {
+            return x === y || (typeof x === 'number' && typeof y === 'number' && isNaN(x) && isNaN(y));
+        }
+        // 7. Repeat, while k < len
+        while (k < len) {
+            // a. Let elementK be the result of ? Get(O, ! ToString(k)).
+            // b. If SameValueZero(searchElement, elementK) is true, return true.
+            if (sameValueZero(o[k], searchElement)) {
+                return true;
+            }
+            // c. Increase k by 1.
+            k++;
+        }
+        // 8. Return false
+        return false;
+    };
 }
-
-(function () {
-    'use strict';
-
-    var rx_one = /^[\],:{}\s]*$/,
-        rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,
-        rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g,
-        rx_four = /(?:^|:|,)(?:\s*\[)+/g,
-        rx_escapable = /[\\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
-        rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
-
-    function f(n) {
-        // Format integers to have at least two digits.
-        return n < 10
-            ? '0' + n
-            : n;
-    }
-
-    function this_value() {
-        return this.valueOf();
-    }
-
-    if (typeof Date.prototype.toJSON !== 'function') {
-
-        Date.prototype.toJSON = function () {
-
-            return isFinite(this.valueOf())
-                ? this.getUTCFullYear() + '-' +
-                        f(this.getUTCMonth() + 1) + '-' +
-                        f(this.getUTCDate()) + 'T' +
-                        f(this.getUTCHours()) + ':' +
-                        f(this.getUTCMinutes()) + ':' +
-                        f(this.getUTCSeconds()) + 'Z'
-                : null;
-        };
-
-        Boolean.prototype.toJSON = this_value;
-        Number.prototype.toJSON = this_value;
-        String.prototype.toJSON = this_value;
-    }
-
-    var gap,
-        indent,
-        meta,
-        rep;
-
-
-    function quote(string) {
-
-// If the string contains no control characters, no quote characters, and no
-// backslash characters, then we can safely slap some quotes around it.
-// Otherwise we must also replace the offending characters with safe escape
-// sequences.
-
-        rx_escapable.lastIndex = 0;
-        return rx_escapable.test(string)
-            ? '"' + string.replace(rx_escapable, function (a) {
-                var c = meta[a];
-                return typeof c === 'string'
-                    ? c
-                    : '\\u' + ('0000' + a.charCodeAt(0).toString(16)).slice(-4);
-            }) + '"'
-            : '"' + string + '"';
-    }
-
-
-    function str(key, holder) {
-
-// Produce a string from holder[key].
-
-        var i,          // The loop counter.
-            k,          // The member key.
-            v,          // The member value.
-            length,
-            mind = gap,
-            partial,
-            value = holder[key];
-
-// If the value has a toJSON method, call it to obtain a replacement value.
-
-        if (value && typeof value === 'object' &&
-                typeof value.toJSON === 'function') {
-            value = value.toJSON(key);
-        }
-
-// If we were called with a replacer function, then call the replacer to
-// obtain a replacement value.
-
-        if (typeof rep === 'function') {
-            value = rep.call(holder, key, value);
-        }
-
-// What happens next depends on the value's type.
-
-        switch (typeof value) {
-        case 'string':
-            return quote(value);
-
-        case 'number':
-
-// JSON numbers must be finite. Encode non-finite numbers as null.
-
-            return isFinite(value)
-                ? String(value)
-                : 'null';
-
-        case 'boolean':
-        case 'null':
-
-// If the value is a boolean or null, convert it to a string. Note:
-// typeof null does not produce 'null'. The case is included here in
-// the remote chance that this gets fixed someday.
-
-            return String(value);
-
-// If the type is 'object', we might be dealing with an object or an array or
-// null.
-
-        case 'object':
-
-// Due to a specification blunder in ECMAScript, typeof null is 'object',
-// so watch out for that case.
-
-            if (!value) {
-                return 'null';
-            }
-
-// Make an array to hold the partial results of stringifying this object value.
-
-            gap += indent;
-            partial = [];
-
-// Is the value an array?
-
-            if (Object.prototype.toString.apply(value) === '[object Array]') {
-
-// The value is an array. Stringify every element. Use null as a placeholder
-// for non-JSON values.
-
-                length = value.length;
-                for (i = 0; i < length; i += 1) {
-                    partial[i] = str(i, value) || 'null';
-                }
-
-// Join all of the elements together, separated with commas, and wrap them in
-// brackets.
-
-                v = partial.length === 0
-                    ? '[]'
-                    : gap
-                        ? '[\n' + gap + partial.join(',\n' + gap) + '\n' + mind + ']'
-                        : '[' + partial.join(',') + ']';
-                gap = mind;
-                return v;
-            }
-
-// If the replacer is an array, use it to select the members to be stringified.
-
-            if (rep && typeof rep === 'object') {
-                length = rep.length;
-                for (i = 0; i < length; i += 1) {
-                    if (typeof rep[i] === 'string') {
-                        k = rep[i];
-                        v = str(k, value);
-                        if (v) {
-                            partial.push(quote(k) + (
-                                gap
-                                    ? ': '
-                                    : ':'
-                            ) + v);
-                        }
-                    }
-                }
-            } else {
-
-// Otherwise, iterate through all of the keys in the object.
-
-                for (k in value) {
-                    if (k !== "this")
-                    {
-                        if (Object.prototype.hasOwnProperty.call(value, k)) {
-                            v = str(k, value);
-                            if (v) {
-                                partial.push(quote(k) + (
-                                    gap
-                                        ? ': '
-                                        : ':'
-                                ) + v);
-                            }
-                        }
-                    }
-                }
-            }
-
-// Join all of the member texts together, separated with commas,
-// and wrap them in braces.
-
-            v = partial.length === 0
-                ? '{}'
-                : gap
-                    ? '{\n' + gap + partial.join(',\n' + gap) + '\n' + mind + '}'
-                    : '{' + partial.join(',') + '}';
-            gap = mind;
-            return v;
-        }
-    }
-
-// If the JSON object does not yet have a stringify method, give it one.
-
-    if (typeof JSON.stringify !== 'function') {
-        meta = {    // table of character substitutions
-            '\b': '\\b',
-            '\t': '\\t',
-            '\n': '\\n',
-            '\f': '\\f',
-            '\r': '\\r',
-            '"': '\\"',
-            '\\': '\\\\'
-        };
-        JSON.stringify = function (value, replacer, space) {
-
-// The stringify method takes a value and an optional replacer, and an optional
-// space parameter, and returns a JSON text. The replacer can be a function
-// that can replace values, or an array of strings that will select the keys.
-// A default replacer method can be provided. Use of the space parameter can
-// produce text that is more easily readable.
-
-            var i;
-            gap = '';
-            indent = '';
-
-// If the space parameter is a number, make an indent string containing that
-// many spaces.
-
-            if (typeof space === 'number') {
-                for (i = 0; i < space; i += 1) {
-                    indent += ' ';
-                }
-
-// If the space parameter is a string, it will be used as the indent string.
-
-            } else if (typeof space === 'string') {
-                indent = space;
-            }
-
-// If there is a replacer, it must be a function or an array.
-// Otherwise, throw an error.
-
-            rep = replacer;
-            if (replacer && typeof replacer !== 'function' &&
-                    (typeof replacer !== 'object' ||
-                    typeof replacer.length !== 'number')) {
-                throw new Error('JSON.stringify');
-            }
-
-// Make a fake root object containing our value under the key of ''.
-// Return the result of stringifying the value.
-
-            return str('', {'': value});
-        };
-    }
-
-
-// If the JSON object does not yet have a parse method, give it one.
-
-    if (typeof JSON.parse !== 'function') {
-        JSON.parse = function (text, reviver) {
-
-// The parse method takes a text and an optional reviver function, and returns
-// a JavaScript value if the text is a valid JSON text.
-
-            var j;
-
-            function walk(holder, key) {
-
-// The walk method is used to recursively walk the resulting structure so
-// that modifications can be made.
-
-                var k, v, value = holder[key];
-                if (value && typeof value === 'object') {
-                    for (k in value) {
-                        if (Object.prototype.hasOwnProperty.call(value, k)) {
-                            v = walk(value, k);
-                            if (v !== undefined) {
-                                value[k] = v;
-                            } else {
-                                delete value[k];
-                            }
-                        }
-                    }
-                }
-                return reviver.call(holder, key, value);
-            }
-
-
-// Parsing happens in four stages. In the first stage, we replace certain
-// Unicode characters with escape sequences. JavaScript handles many characters
-// incorrectly, either silently deleting them, or treating them as line endings.
-
-            text = String(text);
-            rx_dangerous.lastIndex = 0;
-            if (rx_dangerous.test(text)) {
-                text = text.replace(rx_dangerous, function (a) {
-                    return '\\u' +
-                            ('0000' + a.charCodeAt(0).toString(16)).slice(-4);
-                });
-            }
-
-// In the second stage, we run the text against regular expressions that look
-// for non-JSON patterns. We are especially concerned with '()' and 'new'
-// because they can cause invocation, and '=' because it can cause mutation.
-// But just to be safe, we want to reject all unexpected forms.
-
-// We split the second stage into 4 regexp operations in order to work around
-// crippling inefficiencies in IE's and Safari's regexp engines. First we
-// replace the JSON backslash pairs with '@' (a non-JSON character). Second, we
-// replace all simple value tokens with ']' characters. Third, we delete all
-// open brackets that follow a colon or comma or that begin the text. Finally,
-// we look to see that the remaining characters are only whitespace or ']' or
-// ',' or ':' or '{' or '}'. If that is so, then the text is safe for eval.
-
-            if (
-                rx_one.test(
-                    text
-                        .replace(rx_two, '@')
-                        .replace(rx_three, ']')
-                        .replace(rx_four, '')
-                )
-            ) {
-
-// In the third stage we use the eval function to compile the text into a
-// JavaScript structure. The '{' operator is subject to a syntactic ambiguity
-// in JavaScript: it can begin a block or an object literal. We wrap the text
-// in parens to eliminate the ambiguity.
-
-                j = eval('(' + text + ')');
-
-// In the optional fourth stage, we recursively walk the new structure, passing
-// each name/value pair to a reviver function for possible transformation.
-
-                return typeof reviver === 'function'
-                    ? walk({'': j}, '')
-                    : j;
-            }
-
-// If the text is not JSON parseable, then a SyntaxError is thrown.
-
-            throw new SyntaxError('JSON.parse');
-        };
-    }
-}());
 
 /*
 MIT License
 
-Copyright (c) 2019 Max Johnon
+Copyright (c) 2019 Max Johnson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2718,7 +1964,168 @@ SOFTWARE.
 */
 
 
-/* An extenscript compatable log library with shims for basic Console calls
+/* README.md
+# Summary
+ An Adobe ExtendScript compatible log file constructor with some built in
+ convenience functions in a UMD wrapper for cross-compatability with AMD and
+ node.js require.
+
+Tries to be flexible but automate most things.
+
+# Features
+- Works with node.js require, AMD(probably), and vanilla ExtendScript.
+- Tries to make a log file in ./logs with fallback to ~/Desktop/ExtendScript_Log_UnsavedScripts/
+- Tries to clean up old files automatically (or keep them foreverrr)
+- Plays nice with [ExtendScript_Log](https://github.com/MaxJohnson/extendscript_log)
+
+# Import
+## NPM
+If running Node NPM, you can `npm install ExtendScript_Log` to add to your node_modules folder
+## github
+Clone or download the repo and copy the extendscript_logfile.jsxinc to your project
+
+# Include
+
+## NPM
+`var LogFile = require("ExtendScript_LogFile");`
+
+## AMD
+I don't know but it's probably not difficult? Firmly in the untested-but-should-work category
+
+## ExtendScript
+### Eval into environment
+`$.evalFile("<path>/extendscript_logfile.jsxinc")`
+
+### Include in scripts
+`//@include "<path>/extendscript_logfile.jsxinc"`
+
+### concatinate or copy-paste directly
+Add to a build script or, I dunno, just copy-pasta it in there?
+
+# Use:
+
+## Make new LogFile object
+make a new log file and you get a separate instance
+```
+var myLogFile = new ExtendScript_LogFile();
+myLogFile.log('Hey there.');
+```
+### Constructor options
+"new" constructor takes 4 optional arguments.
+
+```new ExtendScript_LogFile (root, logType, logDir, useDate)```
+
+#### Argument 1 : root
+is an alternate root object to tack on a 'logFile' alias
+By passing $.global as first arg, we get global log and console objects!
+
+```
+root = $.global;// root to add convenience aliases to
+
+var myExplicitLogFileVariable = new ExtendScript_LogFile(root);
+myExplicitLogFileVariable.log('So explicit!');// call from a var
+logFile.log('Like magic.');// uses the $.global.logFile we made
+```
+
+#### Argument 2 : logType
+ specifies a non-"default" *type* and makes a file name
+```
+var myLogFile = new ExtendScript_LogFile();
+myLogFile.log('Hey there.');
+
+var specialLogFile = new ExtendScript_LogFile(null,"special");
+specialLogFile.log('Salutations.');
+
+// prints to:
+// ./logs/default_2021-05-28T16-15-37.611.log >>[2021-05-28T16:15:37.612] default : Hey there.
+// ./logs/special_2021-05-28T16-15-37.656.log >>[2021-05-28T16:15:37.657] special : Salutations.
+```
+
+#### Argument 3 : logDir (default: './logs/')
+a non-"default" directory path to save the log to
+```
+root = $.global;// root to add convenience aliases to
+logType = "special";// name other than "default"
+logDir = '~/Desktop/mylogcabin/';// custom log directory
+
+var myLogFile = new ExtendScript_LogFile(root, logType, logDir);
+myLogFile.log('Salutations.');
+
+// prints to:
+// ~/Desktop/mylogcabin/special_2021-05-28T16-15-37.656.log >>[2021-05-28T16:15:37.657] special : Salutations.
+```
+
+#### Argument 3 : useDate (default: true)
+specifies if the date should be prepended to the log entries
+can be changed with `.useDate(false)`
+```
+root = $.global;// root to add convenience aliases to
+logType = "special";// name other than "default"
+logDir = '~/Desktop/mylogcabin/';// custom log directory
+useDate = false;
+
+var myLogFile = new ExtendScript_LogFile(root, logType, logDir, useDate);
+
+myLogFile.log('Salutations.');
+
+// prints to:
+// ~/Desktop/mylogcabin/special_2021-05-28T16-15-37.656.log >> special : Salutations.
+```
+
+## Use the log file
+`.log()` and `.writeln()` do the same thing...
+
+`.useDate(false)` will disable the date printing in each entry
+
+### Attatch to namespace or other log object
+```
+myLogFile = new ExtendScript_Log($.global);
+logFile.log('Messages are good.');
+
+var namespace = {};// maybe some other log system?
+
+myLogSafeFile = new ExtendScript_Log(namespace);
+namespace.logFile.log('This is way safer.');
+```
+## Cleanup
+You can `.clear()` the contents or `.remove()` the file from disk.
+
+You can also clear out of the same *type* with `.removeOld()` for non-current or `.removeAll()` for all.
+```
+myLogFile = new ExtendScript_Log();
+logfile.log('Messages are good.');
+
+myLogSafeFile = new ExtendScript_Log(namespace,'special');
+namespace.logFile.log('This is way safer.');
+
+myLogSafeFile.remove();
+
+// make a bunch of "default" logs...
+myLogFile = new ExtendScript_Log();
+myLogFile = new ExtendScript_Log();
+myLogFile = new ExtendScript_Log();
+myLogFile = new ExtendScript_Log();
+
+// purge all but latest "default" log.
+myLogFile.removeOld();
+
+// now only the current "default" file is left
+myLogFile.removeAll();
+
+myLogSafeFile = new ExtendScript_Log(namespace);
+
+```
+
+# Bonus Features
+## Logs for unsaved scripts:
+Tries to make a log file in ./logs in the location of the currently running
+script, but will fall back to ~/Desktop/ExtendScript_Log_UnsavedScripts/
+
+## Compatible with ExtendScript_Log:
+This is used as a optional extra in [ExtendScript_Log](https://github.com/MaxJohnson/extendscript_log)
+
+Like peanutbutter and chocolate...
+
 */
 
 // Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
@@ -2736,12 +2143,14 @@ SOFTWARE.
     // (root is global... so should be $.global for ExtendScript)
     root.ExtendScript_LogFile = factory;
   }
-}($.global, function (root, logType) {// IIFE straight into the UMD, attaching to the $.global space
+}($.global, function (root, logType, logDir, useDate) {// IIFE straight into the UMD, attaching to the $.global space
 
     $.strict = true;
-    $.writeln("Making extendscript LogFile...");
+    $.writeln("Loading extendscript LogFile...");
 
     var LogFile = { };
+    var _logDir = logDir;
+    var _useDate = (useDate !== false);
 
 //helper functions
 
@@ -2752,7 +2161,7 @@ SOFTWARE.
             logFileDir.create();
         }
 
-        var logFileName = _getISODate() + "-" + typeString + ".log";
+        var logFileName = typeString + "_" + _getDateString().replace(/[:]/g,'-')+ ".log";
         var logFilePath = _getDirString() + logFileName;
         return new File(logFilePath);
     }
@@ -2770,7 +2179,7 @@ SOFTWARE.
             for (f = 0; f < logFiles.length; f++) {
                 var myFile = logFiles[f];
                 var fileTime = myFile.created.getTime();
-                var nameSearch = myFile.name.search(typeString + ".log");
+                var nameSearch = myFile.name.search(typeString + "_");
                 if ( ( fileTime < removeTime || keepLatest == false ) && nameSearch > -1) {
 
                     myFile.remove();
@@ -2786,17 +2195,28 @@ SOFTWARE.
 
     // Get script dir or fallback to desktop temp folder
     function _getDirString() {
-        return (File($.fileName).exists) ? File($.fileName).path + "/logs/" : Folder.desktop + "/ExtendScript_Log_UnsavedScripts/"; // account for un-saved or temp scripts
+        var dirPath;
+        if (_logDir) {
+            // user defined
+            dirPath = _logDir;
+        } else if (File($.fileName).exists) {
+            // same directory as script
+            dirPath = File($.fileName).path + "/logs/";
+        } else {
+            // account for un-saved or temp scripts
+            dirPath = Folder.desktop + "/ExtendScript_Log_UnsavedScripts/";
+        }
+        return dirPath; 
     }
 
-    // Overly complex ISO date string constructor
-    function _getISODate() {
+    // Overly complex UTC-like date string constructor polyfill
+    function _getDateString() {
         var myDate = new Date();
         // forward compatability with ES5 Shims
         if (typeof myDate.getFullYear !== "function") {
             myDate.getFullYear = function() {
                 return (myDate.getYear + 1900); // offset from year 1900
-            }
+            };
         }
 
         var myYear = myDate.getFullYear().toString();
@@ -2806,7 +2226,13 @@ SOFTWARE.
         var myMinutes = _zeroPad(myDate.getMinutes(), 2);
         var mySeconds = _zeroPad(myDate.getSeconds(), 2);
 
-        return myYear + "-" + myMonth + "-" + myDay + "_" + myHours + myMinutes + mySeconds;
+        return myYear + 
+        "-" + myMonth + 
+        "-" + myDay + 
+        "T" + myHours + 
+        ':' + myMinutes + 
+        ':' + mySeconds +
+        '.' + (myDate.getMilliseconds() / 1000).toFixed(3).slice(2, 5);
     }
 
     // Pad those number strings kid. Pad em good.
@@ -2828,26 +2254,31 @@ SOFTWARE.
         LogFile.type = logType;
         LogFile.directory = _getDirString();
         LogFile.file = _createLogFile(_getTypeString());
+        
+        $.writeln("Initializing new LogFile: " + LogFile.file.path);
 
         return LogFile;
-    }
+    };
 
-    //primary method
+    //write to file, date added by default
     LogFile.writeln = LogFile.log = function (logMessage) {
         LogFile.file.open("a+");
-        LogFile.file.writeln(new Date() + ": " + logMessage);
+        if(_useDate) {
+            logMessage = '[' + _getDateString() + "] " + logMessage;
+        }
+        LogFile.file.writeln(logMessage);
         LogFile.file.close();
 
         return LogFile;
-    }
+    };
 
     //cleanup
-    LogFile.clear = LogFile.log = function (logMessage) {
+    LogFile.clear = function () {
         LogFile.file.open("w");
         LogFile.file.close();
 
         return LogFile;
-    }
+    };
 
     //remove this file
     LogFile.remove = function() {
@@ -2856,20 +2287,37 @@ SOFTWARE.
         }
 
         return LogFile;
-    },
+    };
 
     // remove all similar files but this one
     LogFile.removeOld = function () {
         _removeLogFiles();
         return LogFile;
-    },
+    };
 
     // remove all similar files
     LogFile.removeAll = function () {
         _removeLogFiles(false);
         return LogFile;
-    }
+    };
 
+    // change log file directory
+    LogFile.setDirectory = function (newDir) {
+        _logDir = newDir;
+        LogFile.init(LogFile.type);
+        return LogFile;
+    };
+
+    // change log file directory
+    LogFile.useDate = function (useDate) {
+        _useDate = (useDate !== false);//only false if explicitly stated
+        LogFile.init(LogFile.type);
+        return LogFile;
+    };
+
+    if(root) {
+        root.logfile = LogFile;
+    }
     // Spit it out already
     return LogFile.init(logType);
 
@@ -2947,11 +2395,12 @@ Add to a build script or, I dunno, just copy-pasta it in there?
 
 # Use:
 Default log levels are:
-0  - trace
-1  - debug
-2  - info (also default if not specified)
-3  - warn
-10 - error
+
+- 0  - trace
+- 1  - debug
+- 2  - info (also default if not specified)
+- 3  - warn
+- 10 - error
 
 ## Make new log object
 make a new log and you get a separate instance
@@ -2970,7 +2419,7 @@ specialLog.info('Default log is jealous cause I have a label.');
 // SPECIAL:[INFO] Default log is jealous of my label.
 ```
 ### Constructor options
-"new" constructor takes 4 optional arguments.
+"new" constructor takes 6 optional arguments.
 First arg is an alternate root object to tack on a 'log' and 'console' alias
 By passing $.global as first arg, we get global log and console objects!
 
@@ -2978,13 +2427,20 @@ By passing $.global as first arg, we get global log and console objects!
 root = $.global;// root to add convenience alisases to
 logName = "specialLog";// name other than "defualt"
 logLevel = 2;// log level filter
-useLogFile = true;// make a log file? Deafults to false
+useLogFile = true;// make a log file? Deafults to false. (see Bonus Features)
 keepOldLogs = false;// keep or delete all but latest log file?
+logFileDir = undefined;// a string filepath to save logs to.
 
-myLog = new ExtendScript_Log(root, logName, logLevel, useLogFile, keepOldLogs);
+myLog = new ExtendScript_Log(root, logName, logLevel, useLogFile, keepOldLogs, logFileDir);
 ```
 
 ## Use the log
+```
+Log.log (message, useAlert);// standard use
+
+// send custom level/label; doesn't work with Log.info() etc.
+Log.log (message, level, label, useAlert);
+```
 
 ```
 myLog = new ExtendScript_Log($.global);
@@ -3005,21 +2461,32 @@ mySecretLog.warn('Tell no one...');
 ```
 
 Second argument sends up an blocking alert dialog in app if true
-```log.error('Not a good thing', true);```
 
-Third argument
+```
+log.error('Not a good thing', true);
+```
 
 # Bonus Features
 ## Log file:
 Tries to make a log file in ./logs or to ~/Desktop/ExtendScript_Log_UnsavedScripts/
-Needs [ExtendScript_LogFile](https://github.com/MaxJohnson/extendscript_logfile)
-Note: Differnt logs get different log files, even if they all print to the same console.
+or you can specify a custom log folder path as the 6th argument.
+Needs [ExtendScript_LogFile](https://github.com/MaxJohnson/extendscript_logfile),
+*but will make a new log file automatically* if that has been included.
+
+*Note: Different logs get different log files, even if they all print to the same console.*
 
 ## CEP event:
 Tries to send type, level, label, and message as a packet in a custom event "ExtendScript_Log"
 No JSON support needed in the script to send, but you have to un-strigify on receipt:
 data string looks like: `{type: "default", level:2, label:"info", message:"Important things!"}`
 Note: the "clear()" function sends a packet with "clear" label and log level 99.
+
+## Add custom labels and levels:
+```
+// add a custom log level
+Log.addLogLevel("gui",3);
+Log.gui('Making dialog');
+```
 */
 
 // Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
@@ -3048,10 +2515,10 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
     // (root is global... so should be $.global for ExtendScript)
     root.ExtendScript_Log = factory;
   }
-}($.global, function (root, logName, logLevel, useLogFile , keepOldLogs) {// IIFE straight into the UMD, attaching to the $.global space
+}($.global, function (root, logName, logLevel, useLogFile , keepOldLogs, logFileDir) {// IIFE straight into the UMD, attaching to the $.global space
 
     $.strict = true;
-    $.writeln("Making extendscript Log...");
+    $.writeln("Loading extendscript Log...");
 
     var Log = { };
 
@@ -3075,23 +2542,31 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
         fname = !e.fileName ? '???' : decodeURI(e.fileName);
         str = "\tMessage: " + e.message + "\n\tFile: " + fname + "\n\tLine: " + (e.line || '???') + "\n\tError Name: " + e.name + "\n\tError Number: " + e.number;
         if ($.stack) {
-            str += "\t" + $.stack;
+            str += "\n\tStack: " + $.stack.split('\n').join('\n\t  ');
         }
         return str;
     };
 
+
     // Safety wrapper and fallback for stringify attempt
-    _stringifyMessage = function _stringifyMessage(message)
-    {
-        if(typeof message === "string") {return message;}
-        try {
-            return JSON.stringify(message);
-        }
-        catch (e) {
-            return message.toString();
+    _stringifyMessage = function _stringifyMessage(message) {
+        switch (typeof message) {
+            case 'string':
+                return message;
+
+            case 'function':
+                // for logging, give more than just 'undefined'
+                message = message.toString();
+                return /(function [^\{]*)/.exec(message)[1];
+
+            default:
+                if (JSON && typeof JSON.stringify === 'function') {
+                    return JSON.stringify(message);
+                } else {
+                    return String(message);
+                }
         }
     };
-
 
     /**
      * Initialize log object with parameters
@@ -3102,14 +2577,14 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
      * @param  {Boolean} keepOldLogs Unless set to true, only the latest log file is kept.
      * @return {Object}            Log object for chaining
      */
-    Log.init = function(logName, logLevel, useLogFile, keepOldLogs) {
+    Log.init = function(logName, logLevel, useLogFile, keepOldLogs, logFileDir) {
         Log.level = (typeof logLevel == "number") ? logLevel : 0;
-        Log.type = (typeof logName == "string")? logName.toLowerCase():"";
+        Log.type = (typeof logName == "string")? logName.toLowerCase():"default";
 
         if (useLogFile && typeof ExtendScript_LogFile == "function") {
 
             if (!Log.logFile) {
-                Log.logFile = new ExtendScript_LogFile(Log, logName);
+                Log.logFile = new ExtendScript_LogFile(Log, logName, logFileDir);
                 if (!keepOldLogs) {
                     Log.logFile.removeOld();
                 }
@@ -3118,6 +2593,44 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
         return Log;
     };
 
+    /**
+     * Ensures special control characters are properly escaped for
+     * JSON message delivery
+     * This is a bastardization of the `Quote(value)` operation
+     * defined in ES 5.1 section 15.12.3.
+     * @method
+     * @param  {String} value string to escape control chars from
+     * @return {String}       fixed up string
+     */
+    Log.escapeControlCharacters = function (value) {
+        // Control characters and escaped equivalents
+        var Escapes = {
+            92: "\\\\",
+            34: '\\"',
+            8: "\\b",
+            12: "\\f",
+            10: "\\n",
+            13: "\\r",
+            9: "\\t"
+        };
+
+        var _escapeChar = function(character) {
+            var charCode = character.charCodeAt(0);
+            var escaped = Escapes[charCode];
+            if (escaped) {
+                return escaped;
+            }
+            return "\\u00" + toPaddedString(2, charCode.toString(16));
+        };
+
+        var reEscape = /[\x00-\x1f\x22\x5c]/g;
+        reEscape.lastIndex = 0;
+
+        if(reEscape.test(value)) {
+            value = value.replace(reEscape, _escapeChar);
+        }
+        return value;
+    };
 
     /**
      * Master log function to filter log, print, send event, write to file.
@@ -3126,53 +2639,80 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
      * @param   {Number}    level     log level 0 being least urgent
      * @param   {String}    label     Label for log level ex. "info"
      * @param   {boolean}   useAlert  true to invoke blocking alert dialog
-     * @return {Object}              self reference for chaining
+     *                                can be used in place of level for shorthand call
+     * @return  {Object}              self reference for chaining
      */
     Log.log = function log(message, level, label, useAlert) {
-        var file;
-        level = level || 2;
-        // try to add label (ex. "[WARN] ")
-        var prefix = (typeof label == "string" && label.length)? "["+label.toLowerCase()+"] ":'';
+        var messageStr;
+        var data = {};
+        var eventObj = new CSXSEvent();
 
-        // try to JSON strigify
-        if(typeof message !=="string") { message = _stringifyMessage(message); }
+        // try to add labels (ex. "MyLogger [WARN] : ")
+        var prefix = "";
+            prefix += (Log.type.length) ? Log.type.toLowerCase() + " " : "";
+            prefix += (typeof label == "string" && label.length) ? "[" + label.toLowerCase() + "] " : "";
+            prefix += (prefix.length) ? ": " : "";
 
+        // check if shorthand call log(message, useAlert)
+        useAlert = (typeof level === 'boolean') ? level : useAlert;// if user did log.log("messages", true)
+        level = (typeof level === 'number') ? level : 2;
 
         // reject by level
         if ( level < Log.level ) {
             return;
         }
 
-        // Send message to Extendscript console
-        if ($) {
-            if (Log.type.length){
-                $.writeln( Log.type.toLowerCase()+":"+prefix + message);
-            } else {
-                $.writeln( prefix + message);
-            }
+        if(message instanceof Error) {
+            // add stack trace, but remove any colons ":" or the JSON parser 
+            // freaks out no matter what I try on the receiving end.
+            message.stack = $.stack.replace(/[:]/g,'\\:').split('\n');
+            delete message.source;// please don't send the entire source code in the message.
         }
 
+        // try to JSON strigify
+        messageStr = _stringifyMessage(message);
+
+        // remove non-printable and other non-valid JSON chars
+        messageStr = messageStr.replace(/[\u0000-\u0019]+/g,'');
 
         // Send message to CEP (panel) context via event packet
         // un-strigify on receipt for:
         // {type: "default", level:0, label:"log", message:"Important things!"}
         if(typeof _xLib !== "undefined")
         {
-            if(typeof label !== 'string' || !label.length){ label = "log";}
-            var eventObj = new CSXSEvent();
+            if(typeof label !== 'string' || !label.length) { label = "log";}
+
+            data =
+              '{' +
+              '"type":"'      + Log.type +
+              '","level":"'   + level +
+              '","label":"'   + label +
+              '","message":"' + Log.escapeControlCharacters(messageStr) +
+              '"}';
             eventObj.type = "ExtendScript_Log";
-            eventObj.data = '{"type":"'+Log.type+'","level":"'+level+'","label":"'+label+'","message":"'+message+'"}';
+            eventObj.data = data;
             eventObj.dispatch();
+        }
+
+        if(message instanceof Error) {
+            messageStr = prefix + ' ERROR\n' + _getExceptionMessage(message);
+        } else {
+            messageStr = prefix + messageStr;
+        }
+
+        // Send message to Extendscript console
+        if ($) {
+            $.writeln( messageStr);
         }
 
         // Write to log file
         if ( Log.logFile instanceof Object && Log.logFile.file instanceof File) {
-            Log.logFile.writeln(prefix + message);
+            Log.logFile.writeln(messageStr);
         }
 
         // Popup blocking alert
         if (useAlert) {
-            alert(message);
+            alert(messageStr);
         }
         return Log;
     };
@@ -3194,14 +2734,10 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
 
         Log.levels[name] = level;
         Log[name] = function (message, useAlert) {
-            if(message instanceof Error) {
-                message = _getExceptionMessage(message);
-            }
-            return Log.log(_stringifyMessage(message), level, name, useAlert);
+            return Log.log(message, level, name, useAlert);
         };
         return Log;
     };
-
 
     /**
      * Remove log level with specified name
@@ -3265,7 +2801,7 @@ Note: the "clear()" function sends a packet with "clear" label and log level 99.
         root.console = Log;
     }
 
-    return Log.init(logName, logLevel, useLogFile, keepOldLogs);
+    return Log.init(logName, logLevel, useLogFile, keepOldLogs, logFileDir);
 
 }));
 
@@ -3513,13 +3049,6 @@ Also, I'm not trying to solve every dialog problem in one API. If there's someth
 // Add semicolon to prevent BAD THINGS (TM) from happening to concatenated code.
 ;
 
-// shim in log
-try{ log.log; }
-catch(e){
-    log = {};
-    log.log = function(i){ $.writeln(i); };
-}
-
 // UMD for compatability with AMD and Node require, but still support a global constructor in the ExtendScript context
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) {
@@ -3535,6 +3064,14 @@ catch(e){
 }($.global, function (root, overrideNative) {// IIFE straight into the UMD, attaching to the $.global space
 
     $.strict = true;
+
+    // shim in log
+    try{ log.log(''); }
+    catch(e){
+        log = {};
+        log.log = function(i){ $.writeln(i); };
+    }
+
     log.log("Making extendscript Dialogs...");
 
     // Default to override global dialogs.
@@ -3561,7 +3098,7 @@ catch(e){
             w.message.maximumSize = [1000,1000];
         }
         return w;
-    }
+    };
 
     /**
      * Add basic default static text message to existing dialog
@@ -3576,10 +3113,10 @@ catch(e){
         if( skippable )
         {
             w.cbNoAskAgain = w.add('checkbox', undefined, 'Don\'t ask about this again.');
-            w.cbNoAskAgain.onClick = function(){ _UICache[id].skip = w.cbNoAskAgain.value };
+            w.cbNoAskAgain.onClick = function(){ _UICache[id].skip = w.cbNoAskAgain.value;};
         }
         return w;
-    }
+    };
 
     /**
      * Add basic default static text message to existing dialog
@@ -3605,7 +3142,7 @@ catch(e){
         w.buttonGroup = w.add('group');
         w.buttonGroup.orientation = "row";
 
-        for( btn in buttons )
+        for( var btn in buttons )
         {
             if( !buttons.hasOwnProperty (btn) ) continue;// sanity check for shims on for/in loops
 
@@ -3619,7 +3156,7 @@ catch(e){
         w.defaultElement = w.buttonGroup.children[(w.buttonGroup.children.length-1)];
         w.cancelElement = w.buttonGroup.children[0];
         return w;
-    }
+    };
 
     /**
      * Get cached UI options object, if anyway
@@ -3627,9 +3164,9 @@ catch(e){
      * @return {Object}    Cached UI options object or undefined
      */
     Dialogs.getCached = function (id) {
-        if(typeof id === "undefined"){id=-1};
+        if(typeof id === "undefined"){id=-1;}
         return _UICache[id];
-    }
+    };
 
     /**
      * Get cached UI options object, if anyway
@@ -3637,9 +3174,9 @@ catch(e){
      * @return {Object}    Cached UI options object or undefined
      */
     Dialogs.clearCached = function (id){
-        if(typeof id === "undefined"){id=-1};
+        if(typeof id === "undefined"){id=-1;}
         _UICache[id] = undefined;
-    }
+    };
 
     /**
      * Replaces standard alert with prettier and skippable ScriptUI version
@@ -3664,7 +3201,7 @@ catch(e){
         args.buttons = args.buttons || ["OK"];
 
         return Dialogs.confirm(args);
-    }
+    };
 
     /**
      * Replaces standard confirm with prettier and skippable ScriptUI version
@@ -3716,11 +3253,11 @@ catch(e){
         _addButtons(w,args.id,args.buttons);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
         return w.show();
-    }
+    };
 
     /**
      * Replaces standard prompt with prettier and skippable ScriptUI version
@@ -3796,15 +3333,15 @@ catch(e){
         _addButtons(w,args.id,args.buttons, onClickDlgButton);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
 
         if( w.show() !== 0 )
         {
             return _UICache[args.id].value;
         }
-    }
+    };
 
     /**
      * Dialog with dropdown menu
@@ -3871,20 +3408,20 @@ catch(e){
         _addButtons(w,args.id,args.buttons, onClickDlgButton);
 
         // Jiggle the handle on layout cause long strings in statictext don't look right first time
-        w.onShow = function(){ w.layout.resize (true); }
-        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; }
+        w.onShow = function(){ w.layout.resize (true); };
+        w.onResize = function(){ if(w.message) w.message.size.width = w.size.width-10; };
         w.center();
 
         if( w.show()!== 0 )
         {
             return _UICache[args.id].value;
         }
-    }
+    };
 
     // mimic functionality from native JS dialogs...
     function alertNative (arg) {
         var args = (typeof arg == "object")? arg:{title:"Alert",id:-1,text:arg, buttons:["OK"]};
-        Dialogs.alert(arg);
+        Dialogs.alert(args);
     }
     function confirmNative (arg) {
         if(typeof arg == "object") {
@@ -3903,26 +3440,18 @@ catch(e){
         root.Dialogs = Dialogs;
         if(root !== $.global)
         {
-            try {
-                root.alert = alertNative;
-                root.confirm = confirmNative;
-                root.prompt = promptNative;
-            } catch(e) {
-                log.log("[ERROR] "+e.message);
-            }
+            root.alert = alertNative;
+            root.confirm = confirmNative;
+            root.prompt = promptNative;
         }
     }
 
     // replace native js dialogs with ours
     if(overrideNative === true) {
         $.sleep(200);// sleep or sometimes native alert is read-only...
-        try {
-            $.global.alert = alertNative;
-            $.global.confirm = confirmNative;
-            $.global.prompt = promptNative;
-        } catch(e) {
-            log.log("[ERROR] "+e.message);
-        }
+        $.global.alert = alertNative;
+        $.global.confirm = confirmNative;
+        $.global.prompt = promptNative;
     }
 
     // return a reference
@@ -3934,7 +3463,7 @@ catch(e){
     $.writeln("Libs for shims, shams, polyfills, and party hats loaded...");
 }// end dependency check
 else {
-    console.log("ES5 function [].map() found. Assume we already shim-shammed this party. Not reinitializing dependencies.");
+    console.debug("ES5 function [].map() found. Assume we already shim-shammed this party. Not reinitializing dependencies.");
 }
 
  /* jshint ignore: end */
@@ -4318,6 +3847,39 @@ ApplyImageChannel.Blue = new Enumerator('ApplyImageChannel.Blue', c2id('Bl  '));
 // Global utilities
 
 /**
+  * Test if defined and not null
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  if defined and not null
+  */
+var isDef = Lifter.isDef = function isDef(v) {
+    return (typeof v !== 'undefined' && v !== null);
+};
+
+
+/**
+  * Test if variable has .length or keys().length > 0
+  * everything else returns true (empty).
+  * Useful because because jQuery objects can have
+  *  a .length of 0 but still have keys().length
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  false if varibale has length > 0
+  */
+var isEmpty = Lifter.isEmpty = function isEmpty(v) {
+    // do this because jQuery objects can have length 0 on objects with keys
+    var empty = true;
+    if (isDef(v)) {
+        if (isDef(v.length)) {
+            empty = (v.length === 0);
+        } else if (Object.keys(v).length > 0) {
+            empty = false;
+        }
+    }
+    return empty;
+};
+
+/**
 * Store current Ruler Unit settings and set to new unit setting
 * @param {Int} units a Units.<something> value, eg. Units.PIXELS
 */
@@ -4333,6 +3895,35 @@ var setRuler = Lifter.setRuler = function setRuler (units)
 var resetRuler = Lifter.resetRuler = function resetRuler (units)
 {
     app.preferences.rulerUnits = _rulerUnitCache.pop();
+};
+
+/**
+ * Get a rect (x,y,width,height) from bounds or bounds-like number array
+ *
+ * @param {*} bounds  a bounds object or number array
+ * @returns [Object]  object with x, y, width, height
+ */
+var getRect = Lifter.getRect = function getRect(bounds, unit) {
+    var rect = {};
+    unit = (typeof unit === 'string')? unit : 'px';
+
+    function _getVal(o) {
+        return (o instanceof UnitValue) ? o.as(unit) : o;
+    }
+
+    if(bounds instanceof LayerBounds) {
+        rect.x = bounds.left.as(unit);
+        rect.y = bounds.top.as(unit);
+        rect.width = bounds.right.as(unit) - rect.x;
+        rect.height = bounds.bottom.as(unit) - rect.y;
+    } else {
+        rect.x = _getVal(bounds[0]);
+        rect.y = _getVal(bounds[1]);
+        rect.width = _getVal(bounds[2]) - rect.x;
+        rect.height = _getVal(bounds[3]) - rect.y;
+    }
+
+    return rect;
 };
 
 /**
@@ -4463,8 +4054,13 @@ function _find(collection, findType, patterns, context)
         {
             var matchPattern = patterns[keys[j]];
             var matchTarget = collection.prop(id, keys[j]);
-            if (patterns[keys[j]] !== collection.prop(id, keys[j]))
-                return false;
+            if(matchPattern instanceof RegExp) {
+                if (matchPattern.test(matchTarget) === false)
+                    return false;
+            } else {
+                if (matchPattern !== matchTarget)
+                    return false;
+            }
         }
 
         found.push(id);
@@ -4789,6 +4385,171 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 };
 
 /**
+ * Copyright 2019 Max Johnson
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 	http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+; (function ()
+{
+    var colors = {};
+
+    /*** Converts RGB array to SolidColor color object
+    * @param { Array } color RGB array eg [255,255,255]
+    * @returns { SolidColor }
+    */
+    colors.arrayToSolidColor = function colorArrayToSolidColor(aRGB) {
+        var color = new SolidColor();
+        color.rgb.red = aRGB[0];
+        color.rgb.green = aRGB[1];
+        color.rgb.blue = aRGB[2];
+        return color;
+    };
+
+
+    /**
+     * Converts SolidColor color object to RGB array [255,255,255]
+     * @param {SolidColor}  color   SolidColor object
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.solidColorToArray = function colorSolidColorToArray(color) {
+        if (color.hasOwnProperty("rgb")) {
+            return [color.rgb.red, color.rgb.green, color.rgb.blue];
+        }
+        return [];
+    };
+
+
+    /**
+     * Converts rgb color text list or hex value to array eg. "#777777",
+     * "(255,255,255)", "[255, 255, 255]"
+     * @param {String}  color   0-255 rgb color text list  eg. "(255,255,255)", "[255, 255, 255]"
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.stringToArray = function colorStringToArray(color) {
+        // no commas means hex... cause assumptions.
+        if (color.indexOf(",") === -1) {
+            // strip # symbol if present...
+            if ((color.indexOf("#") === 0)) {
+                color = color.substring(1, color.length);
+            }
+            // handle shorthand #334 style. So robust!
+            if (color.length === 3) {
+                color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2];
+            }
+            // parse char pairs in base 16
+            return [
+                parseInt(color.substring(0, 2), 16),
+                parseInt(color.substring(2, 4), 16),
+                parseInt(color.substring(4, 6), 16)
+            ];
+        } else {
+            // strip whitespace, brackets, and parens, then convert to array
+            return color.replace(/[\s\(\)\[\]]/g, "").split(",");
+        }
+    };
+
+    /**
+     * Attempts to convert object to Photoshop SolidColor object
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {Array}
+     */
+    colors.toSolidColor = function colorToSolidColor(color) {
+        if(color instanceof SolidColor === false) {
+            if(typeof color === 'string') {
+                color = colors.toArray(color);
+            }
+            color = colors.arrayToSolidColor(color);
+        }
+        return color;
+    };
+
+
+    /**
+     * Attempts to convert var to Action Descriptor Color object
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {ActionDescriptor}
+     */
+    colors.toActionDescriptor = function colorToActionDescriptor(color) {
+        var aColor = colors.toArray(color);
+        var descColor = new ActionDescriptor();
+        var descRGBC = new ActionDescriptor();
+        descRGBC.putDouble( c2id( 'Rd  ' ), aColor[0] );
+        descRGBC.putDouble( c2id( 'Grn ' ), aColor[1] );
+        descRGBC.putDouble( c2id( 'Bl  ' ), aColor[2] );
+        descColor.putObject( s2id( "color" ), s2id( "RGBColor" ), descRGBC );
+
+        return descColor;
+    };
+
+
+    /**
+     * Attempts to convert object to 0-255 based RGB array
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.toArray = function colorToArray(color) {
+        //$._PSU.log(color.hasOwnProperty("constructor"),true)
+        if (typeof color !== "undefined") {
+            switch (color.constructor.name) {
+                case "SolidColor":
+                    color = colors.solidColorToArray(color);
+                    break;
+                case "String":
+                    color = colors.stringToArray(color);
+                    break;
+                case "Array":
+                    color = color;
+                    break;
+                default:
+                    color = colors.solidColorToArray(app.foregroundColor);
+                    break;
+            }
+            return color;
+        } else {
+            return colors.solidColorToArray(app.foregroundColor);
+        }
+    };
+
+
+    /**
+     * Invert a color
+     * @method colorInvert
+     * @param  {*}    color SolidColor object, string, or RGB array [255,255,255]
+     * @return {*}          returns SolidColor or RGB array eg [255,255,255]
+     */
+    colors.invert = function colorInvert(color) {
+        var type = color.constructor.name;
+        color = colors.toArray(color);
+        color = [255 - color[0], 255 - color[1], 255 - color[2]];
+        if(type === "SolidColor") {
+            color = colors.arrayToSolidColor(color);
+        }
+        return color;
+    };
+
+
+    // Public API
+    /**
+    * Contains methods to covert and manipulate colors.
+    */
+    Lifter.colors = colors;
+}());
+
+/**
  * Copyright 2014 Francesco Camarlinghi
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -4848,6 +4609,111 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             ref.putIdentifier(c2id('Dcmn'), documentId);
         }
     }
+
+    function _isSupportedExtension(inPath, category) {
+        var extension = inPath.slice(inPath.lastIndexOf('.'), inPath.length).toUpperCase();
+        var fileTypesLookup = documents.fileTypeSupport[(typeof category === 'string')? category : 'all'];
+        var prop;
+
+        for(prop in fileTypesLookup) {
+            if ( fileTypesLookup.hasOwnProperty( prop ) )
+            {
+                if(fileTypesLookup[prop].indexOf(extension) >= 0 ) { return true; }
+            }
+        }
+        // log.log('indexOf(' + extension + ') = ' + supported.indexOf(extension));
+        return false;
+    }
+
+    /**
+     * Supported document extensions. This is public so that additional properties can be added at runtime.
+     * 'all' can be opened or imported
+     * 'native' can be edited and saveIdList
+     * 'layered' can contain photoshop layers
+     */
+    documents.fileTypeSupport = {
+        'open' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            '3D Studio': ['.3DS'],
+            'Collada DAE': ['.DAE'],
+            'Google Earth 4 KMZ': ['.KMZ'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'WavefrontlOBJ': ['.OBJ'],
+            'Audio': ['.AAC', '.AC3', '.M2A', '.M4A', '.MP2', '.MP3', '.WMA', '.WM'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Camera Raw': ['.TIF', '.CRW', '.NEF', '.RAF', '.ORF', '.MRW', '.DCR', '.MOS', '.RAW', '.PEF', '.SRF', '.ONG', ',X3F', '.CR2', '.ERF', '.SR2', '.KOC', '.MFW', '.MEF', '.ARW', '.NRW', '.RW2', '.RWL', '.IIQ', ',3FR', '.FFF', '.SRW', '.GPR', '.DXO', '.HEIC', '.ARQ', '.CR3'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'Photoshop EPS': ['.EPS'],
+            'Photoshop DCS 1.0': ['.EPS'],
+            'Photoshop DCS 2.0': ['.EPS'],
+            'EPS TIFF Preview': ['.EPS'],
+            'Generic EPS': ['.EPS', '.Al3', '.Al4', '.AI5', '.Al6', '.Al7', '.Al8', '.PS', '.Al', '.EPSF', '.EPSP'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'Multi-Picture Format': ['.MPO'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDF', '.PDP'],
+            'Photoshop Raw': ['.RAW'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG', '.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'SVG': ['.SVG', '.SVGZ'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'U3D': ['.U3D'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'edit' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDP'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'layers' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'Photoshop PDF': ['.PDP'],
+            'TIFF': ['.TIF', '.TIFF']
+        }
+    };
 
 
     /**
@@ -5167,6 +5033,40 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         desc2.putObject(c2id('Nw  '), c2id('Dcmn'), desc);
         executeAction(c2id('Mk  '), desc2, _dialogModesNo);
         return documents;
+    };
+
+
+
+
+
+    /**
+     * Check if photoshop can open or import a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can open or import the file type.
+     */
+    documents.fileTypeCanOpen = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'open');
+    };
+
+    /**
+     * Check if photoshop can natively edit and save a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can edit and save the file type.
+     */
+    documents.fileTypeCanEdit = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'edit');
+    };
+
+    /**
+     * Check if the file type supports photoshop layers.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = the file type can save photoshop layers.
+     */
+    documents.fileTypeCanHaveLayers = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'layers');
     };
 
     /**
@@ -6131,15 +6031,33 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 // - Method: move layer!
 
 ; (function () {
-    log.log("Lifter.layers loading...");
+    log.debug("Lifter.layers loading...");
     /**
      * @namespace
      * @alias Lifter.layers
      */
+
+    /**
+     * Unique layer id. Will fallback to current active layer id if null or undefined
+     * @typedef {(Number|null)} LayerId
+     */
+
     var layers = {};
 
     /** Utility object used to temporary hold data during heavy operations. @private */
     var _cache = {};
+
+    _cache.refresh = function _cacheRefresh() {
+        // Cleanup cache
+        delete _cache['hasBackground'];
+        delete _cache['layerCount'];
+        // Cache some information to speed up the operation
+        _cache['hasBackground'] = layers.hasBackground();
+        _cache['layerCount'] = layers.count();
+    };
+
+    //Public access to refresh
+    layers.cacheRefresh = _cache.refresh;
 
     /** Sets the passed layer as active and executes the specified callback. @private */
     function _wrapSwitchActive(layerId, callback, context)
@@ -6287,6 +6205,15 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         return desc;
     };
 
+    /**
+     * Gets the DOM representation of the currently active document.
+     * @return {Document} The DOM representation of the currently active document, or null if no documents are open.
+     */
+    layers.toDOM = function toDom(layerId)
+    {
+        layers.stack.makeActive(layerId);
+        return app.activeDocument.activeLayer;
+    };
 
     /** Supported layer properties. This is public so that additional properties can be added at runtime. */
     /**
@@ -7510,13 +7437,13 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             throw new Error('Callback must be a valid function.');
 
         var n, i;
-
-        // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
-        // Cache some information to speed up the operation
-        _cache['hasBackground'] = layers.hasBackground();
-        _cache['layerCount'] = layers.count();
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
+        // // Cache some information to speed up the operation
+        // _cache['hasBackground'] = layers.hasBackground();
+        // _cache['layerCount'] = layers.count();
 
         if (reverse)
         {
@@ -7541,9 +7468,11 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             }
         }
 
-        // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
+        // refresh in case layers were moved around
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
 
         // Chaining
         return layers;
@@ -7585,6 +7514,51 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             while (i < n)
             {
                 if (callback.call(context, i, activeLayerIds[i]))
+                    break;
+                i++;
+            }
+        }
+
+        // Chaining
+        return layers;
+    };
+
+    /**
+     * Iterates over list of layer ids, executing the specified callback on each element.
+     * Please note: Adding or removing layers
+     * while iterating is not supported.
+     * @param {Number[]} layerIds          Array of layer ids to iterate through.
+     * @param {Function} callback       Callback function. It is bound to context and invoked with two arguments (itemIndex, layerId).
+     *                                  If callback returns true, iteration is stopped.
+     * @param {Object} [context=null]   Callback function context.
+     * @param {Boolean} [reverse=false] Whether to iterate from the end of the layer collection.
+     * @return Chained reference to layer utilities.
+     */
+    layers.forEachId = function (layerIds, callback, context, reverse)
+    {
+        if (typeof callback !== 'function')
+            throw new Error('Callback must be a valid function.');
+
+        var n, i;
+        if (reverse)
+        {
+            i = layerIds.length;
+            n = 0;
+
+            while (--i >= n)
+            {
+                if (callback.call(context, i, layerIds[i]))
+                    break;
+            }
+        }
+        else
+        {
+            n = layerIds.length;
+            i = 0;
+
+            while (i < n)
+            {
+                if (callback.call(context, i, layerIds[i]))
                     break;
                 i++;
             }
@@ -7663,7 +7637,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 try {
                     desc = executeActionGet(ref);
                 } catch (e) {
-                    throw new Error('Unable to find '+typeIDToStringID(prop.typeId)+': layers do not have that property or it is un-gettable.');
+                    throw new Error('Unable to find '+typeIDToStringID(prop.typeId)+' on "' + layers.prop(layerId, 'name') + '": layers do not have that property or it is un-gettable.');
                 }
 
                 if (prop.get)
@@ -7698,7 +7672,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     /**
      * Finds all the layers with names matching the string or RegExp.
      * @param {String, RegExp} Exact string or regular expression to search in name.
-     * @return {Array} An array containing seach results.
+     * @return {Number[]} An array containing seach results.
      */
      layers.findAllByName = function ( search )
      {
@@ -7737,42 +7711,97 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     layers.findLast = _find.bind(null, layers, 2);
 
     /**
-     * Gets a list of all parents of the active or specified layer (or topmost layer of active layers).
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @return {Array} LayerId of the all layer's parent groups in ordered list.
+     * Gets an id list of all parents of the active or specified layer (or topmost layer of active layers).
+     * @param {Number} [layerId=Active layer] Layer to get parents from
+     * @param {Boolean} [doAll] If true, returns entire parent heirarchy otherwise immediate parent only.
+     * @return {Number[]} LayerIds of the all layer's parent groups in ordered list.
      */
-    layers.getParentGroupIds = function (layerId)
+    layers.getParentIds = function (inLayerId, doAll)
     {
-        var parentIDs = [];
-        var tgtId = (typeof layerId == "number" )? layerId:layers.prop("layerId");
-        // log.log(tgtId);
+        var n;
+        var i;
+        var layerId;
+        var parentIds = [];
+        var depth = 1;//if < 1, we are deeper in nested groups
+
+        //allow for getParentIds(true);
+        if (typeof inLayerId === 'boolean') { doAll = inLayerId; }
+        if (typeof inLayerId !== 'number') { inLayerId = layers.prop('layerId'); }
+
+        _cache.refresh();
+        n = _cache['layerCount'] + 1;
+        i = layers.prop(inLayerId, 'itemIndex');
+
+        while (++i < n)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if ( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth > 0) {
+                    parentIds.push(layerId);
+                    if(doAll) {
+                        depth = 0;
+                    } else {
+                        break;
+                    }
+                }
+                depth ++;
+            } else if ( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+            }
+        }
+
+        return parentIds;
+    };
+
+    /**
+     * Gets an id list of all valid children of the active or specified layer set.
+     * @param {(Number|null)} [layerId=Active layer] Layer identifier
+     * @param {Boolean} [doSubsets] get ids from subsets (subfolders) can be passed as only arg to use active layer.
+     * @return {Number[]} LayerId of the all layer set's child ids in ordered list.
+     */
+    layers.getChildIds = function (layerSetId, doAll)
+    {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var childIDs = [];
+
+        //allow for getChildIds(true);
+        if (typeof layerSetId === 'boolean') { doAll = layerSetId; }
+        if (typeof layerSetId !== 'number') { layerSetId = layers.prop('layerId'); }
+        if(!layers.isGroup(layerSetId)) {
+            throw new TypeError ('getChildIds() - ' + layers.prop(layerSetId, 'name') + ' is not a layer set.');
+        }
+
+        _cache.refresh();
+        i = layers.prop(layerSetId, 'itemIndex');
+        n = 0;
 
         // run in reverse so we can go "top to bottom"
-        layers.forEach( function (itemIndex, layerId) {
-
-            //log.log(itemIndex + ", " +layers.prop(layerId, "name"));
-
-            if( layers.prop(layerId, "type") == LayerType.SETSTART )
-            {
-                parentIDs.push(layers.prop(layerId,"name"));
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
+                depth ++;
             }
-            else if( layers.prop(layerId, "type") == LayerType.SETEND )
-            {
-                parentIDs.pop();
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                if(depth < 1) { break; }// we are at bottom of our target layer group
             }
-            else if( layerId == tgtId )
-            {
-                // log.log(parentIDs);
-                return parentIDs;
+            else {
+                // log.log(i + ", " +layers.prop(layerId, "name"));
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
             }
-        },null,true);
+        }
 
-        return parentIDs;
+        return childIDs;
     };
 
     /**
      * Gets the identifier of all layers.
-     * @return {Array} LayerId of the all layers.
+     * @return {Number[]} LayerIds of all layers.
      */
     layers.getAllLayerIds = function ()
     {
@@ -7783,7 +7812,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Gets the identifier of all active layers.
-     * @return {Array} LayerIds of the currently active layers.
+     * @return {Number[]} LayerIds of the currently active layers.
      */
     layers.getAllActiveLayerIds = function ()
     {
@@ -7817,7 +7846,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      * Saves a list of layer ids to a cached stack list.
      * @method
      * @param  {Number} cacheId  cacheId to save stack to
-     * @param  {Array}  layerIds list of layer ids to save
+     * @param  {Number[]}  layerIds list of layer ids to save
      * @return {Object}          this layers object for chaining
      */
     layers.stack.saveIdList = function (cacheId, layerIds)
@@ -7905,8 +7934,96 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     layers.stack.getPreviousLayerId = _getStackId.bind(null, c2id('Bckw'));
 
     /**
+     * Gets the id of the next sibling layer of the currently active one in the,
+     * heirarchy, skipping children if active layer is a group.
+     * @return {Number} LayerId of the next sibling layer or -1 if bottom of group or stack
+     */
+    layers.stack.getNextSiblingLayerId = function stackGetNextSiblingLayerId(layerId) {
+        var i = layers.prop(layerId, 'itemIndex');
+        var newIndex = i - 1;
+        var lastIndex = (layers.hasBackground())? 0 : 1;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var targetId;
+
+        // log.debug('getNextSiblingLayerId() of name: ' + layers.prop(layerId,'name'));
+
+        _cache.refresh();
+
+        //if next is group, find bottom of group
+        if(layers.isGroup(layerId)) {
+            // run in reverse so we can go "top to bottom"
+            while (--i > 0 && depth > 0)
+            {
+                targetId = layers.getLayerIdByItemIndex(i);
+                // log.debug('    depth: ' + depth + ', i: ' + i + ", " +layers.prop(targetId, "name"));
+                if ( layers.prop(targetId, "type") == LayerType.SETSTART ) {
+                    depth ++;
+                }
+                else if ( layers.prop(targetId, "type") == LayerType.SETEND ) {
+                    depth --;
+                    if(depth < 1) {
+                        // we are at bottom of our target layer group
+                        // jump past the SETEND layer for the group
+                        newIndex = i - 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // log.debug('  newIndex: ' + String(newIndex+1) + '/' + layers.count());
+        //if not bottom of stack
+        if(newIndex >= lastIndex) {
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.log('  Next sibling layer: '+layers.prop(targetId,'name'));
+            //if not bottom of group
+            if(layers.prop(targetId, 'type') !== LayerType.SETEND) {
+                return targetId;
+            }
+        }
+
+        return -1;
+    };
+
+    /**
+     * Gets the id of the previous sibling layer of the currently active one in the,
+     * heirarchy, skipping children if target layer is a group.
+     * @return {Number} LayerId of the previous sibling layer or -1 if top of group or stack
+     */
+    layers.stack.getPreviousSiblingLayerId = function stackGetPreviousSiblingLayerId(layerId) {
+        // NOTE: return id or -1 for easier debug bc 'undefined' or null var passed into
+        // layers.prop(undefinedVar) returns an ActionDescriptor instead of error
+        var newIndex = layers.prop(layerId, 'itemIndex') + 1;
+        var targetId;
+
+        //abort if top of layer stack
+        _cache.refresh();
+        // log.debug('getPreviousSiblingLayerId - name: ' + layers.prop(layerId,'name') + ', index: ' + String(newIndex-1) + '/' + layers.count());
+        if(newIndex > layers.count()) { return -1; }
+
+        targetId = layers.getLayerIdByItemIndex(newIndex);
+
+        //abort if top of group
+        if(layers.isGroup(targetId)) { return -1; }
+        //if prev is group, get parent of last child of that group
+        else if(layers.prop(targetId, 'type') === LayerType.SETEND) {
+            // log.debug(layers.prop(layerId,'name') + ' Prev is group...');
+            newIndex ++;
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.debug('Target inside: '+layers.prop(targetId,'name'));
+            //edge case filter, don't get parent if it is empty group
+            if(layers.isGroup(targetId)) {
+                targetId = layers.getParentIds(targetId)[0];
+                // log.debug('Target parent: '+layers.prop(targetId,'name'));
+            }
+        }
+
+        return targetId;
+    };
+
+    /**
      * Sets the currently active layer to the one identified by the passed LayerId.
-     * @param {Number,Array} layerIdList Layer identifier or array of ids.
+     * @param {(Number|Number[])} layerIdList Layer identifier or array of ids.
      * @param {Boolean} [makeVisible] Whether to make the layer RGB channels visible.
      * @param {Boolean} [add] Whether to add or replace active layer selection.
      * @return Chained reference to layer utilities.
@@ -7990,21 +8107,67 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     // Groups
     /**
-     * Provides methods to navigate across the layers stack.
+     * Provides methods for manipulating layer groups (sets).
      */
     layers.groups = {};
 
     /**
      * Test if layer is a group
      * @method
-     * @param  {Number} layerId Id of the layer to flatten
+     * @param  {Number} [layerId=active layer] Id of the layer to test
      * @return {Boolean} Layer is a group or not.
      */
     layers.groups.isGroup = function(layerId) {
         return layers.prop(layerId, 'type') == LayerType.SETSTART;
-    },
-    layers.isGroup = layers.groups.isGroup,// convenience alias
+    };
+    layers.isGroup = layers.groups.isGroup;// convenience alias
 
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.getEndIndex = function groupsGetBottomIndex (groupId) {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+
+        if (typeof groupId !== 'number') { groupId = layers.prop('layerId'); }
+
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        _cache.refresh();
+        i = layers.prop(groupId, 'itemIndex');
+        n = 0;
+
+        // run in reverse so we can go "top to bottom"
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            // add depth for new groups, subtract when we hit end of groups
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                depth ++;
+            }
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                // are we at bottom of our target layer group?
+                if(depth < 1) { break; }
+            }
+        }
+        var name = layers.prop(layerId,'name');
+        var isGroup = layers.isGroup(layerId);
+        var prevId = layers.getLayerIdByItemIndex(i+1);
+        var prevName = layers.prop(prevId,'name');
+        // var isGroup = layers.isGroup(layerId);
+        return i;
+    };
 
     /**
      * Make a new group with option to add layers from selected or Id array
@@ -8012,10 +8175,9 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      * @param  {String} name      Name for new group
      * @param  {Boolean} addLayers Add layers to group or not
      * @param  {Number,Array} layerIds  layer Id or Array of layer Ids
-     * @return Chained reference to layer utilities.
+     * @return {Number} layer Id of new group.
      */
-    layers.groups.make = function(name, addLayers, layerIds, color)
-    {
+    layers.groups.make = function(name, addLayers, layerIds, color) {
         var idLyr = s2id( "layer" );
         var idOrdn = c2id( "Ordn" );
         var idTrgt = s2id( "targetEnum" );
@@ -8055,21 +8217,257 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
            descSet.putObject( s2id( "to" ), idLyr, descName );
            executeAction( s2id( "set" ), descSet, DialogModes.NO );
         }
-        return layers;
-    },
+        _cache.refresh();
+        return layers.prop('layerId');
+    };
 
     /**
      * Merge (flatten) a layer group
      * @method
-     * @param  {Number} layerId Id of the layer to flatten
+     * @param  {Number} [layerId=active layer] Id of the layer to flatten
      * @return Chained reference to layer utilities.
      */
     layers.groups.merge = function(layerId) {
         layers.stack.makeActive(layerId);
         executeAction(c2id("Mrg2"), undefined, DialogModes.NO);
+        _cache.refresh();
         return layers;
-    },
+    };
 
+
+    /**
+     * Move a number of layers into the top of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.prepend = function groupsPrepend(groupId, layerIds, ignoreHeirarchy) {
+        // var newIndex = layers.prop(groupId, 'itemIndex');
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATBEGINNING, ignoreHeirarchy);
+        //offset down one to be in top of group
+        // layers.move(layerIds, newIndex, -1);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.append = function groupsAppend(groupId, layerIds, ignoreHeirarchy) {
+        // var groupDOM = layers.toDOM(groupId);
+        // var layerDOM;
+        // var i;
+        // var iCount = layerIds.length;
+        // // var newIndex;
+        // // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        //
+        // for (i = 0; i < iCount; i++) {
+        //     layerDOM = layers.toDOM(layerIds[i]);
+        //     groupDOM.move(layerDOM, ElementPlacement.PLACEATEND);
+        // }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATEND, ignoreHeirarchy);
+        // newIndex = layers.groups.getEndIndex(groupId);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers before (above) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveBefore = function moveBefore(layerIds, targetId, ignoreHeirarchy) {
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEBEFORE, ignoreHeirarchy);
+        // var newIndex = layers.prop(targetId, 'itemIndex');
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move a number of layers to after (below) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveAfter = function moveAfter(layerIds, targetId, ignoreHeirarchy) {
+        // var newIndex = layers.prop(layers.stack.getNextSiblingLayerId(targetId), 'itemIndex');
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEAFTER, ignoreHeirarchy);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move any number of layers to the target index in the stack, with optional
+     * placement and index offset.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer
+     * @param  {ElementPlacement} [position] position relative to target index
+     * @param  {Number} [indexOffset] Id of the target layer (defaults to selected)
+     *                                       (ex. ElementPlacement.PLACEATEND)
+     * @param  {Boolean} [ignoreHeirarchy] if true, will flatten heirarcy of layers being moved
+     * @return Chained reference to layer utilities.
+     */
+    layers.move = function move(layerIds, targetId, placement, indexOffset, ignoreHeirarchy) {
+        // use id so we can dynamically adjust index for multiple moves
+        var targetIndex = layers.prop(targetId,'itemIndex');
+        var newIndex;
+        var moveIds;
+        var i;
+        var iCount;
+        var layerId;
+        var layerIndex;
+        var children;
+        var lastChildId;
+        var lastChildIndex;
+        var groupEndIndex;
+
+        var targetDOM = layers.toDOM(targetId);
+        var layerDOM;
+        var tmpLayerDOM;
+        var tmpLayerIndex;
+
+        function _idFilter(id) { return !children.includes(id); }
+
+        // default args
+        indexOffset = (typeof indexOffset === 'number')? indexOffset : 0;
+        placement = (isDef(placement))? placement : ElementPlacement.PLACEBEFORE;
+
+        if(typeof targetId !== 'number') throw new Error('No invalid target index ' + targetIndex + ' .');
+
+        // happy mutation helpers
+        if (typeof layerIds === 'number') {
+            layerIds = [layerIds];
+        } else if (!L.isDef(layerIds)) {
+            layerIds = layers.stack.getActiveLayerIds();
+        }
+
+        //1st pass filter out children and throw errors
+        //avoids nested heirarchy getting flattened
+        iCount = layerIds.length;
+        moveIds = layerIds;
+        newIndex = targetIndex + indexOffset;
+        for (i = 0; i < iCount; i++) {
+            layerId = layerIds[i];
+            layerIndex = layers.prop(layerId, 'itemIndex');
+
+            // we can skip filtered items!
+            if(moveIds.includes(layerId) === false) {continue;}
+
+            if (layers.isGroup(layerId)) {
+                // can't put a group inside itself! native move() explodes
+                groupEndIndex = layers.groups.getEndIndex(layerId);
+                if (newIndex < layerIndex && newIndex >= groupEndIndex ) {
+                    throw new Error('"' + layers.prop(layerId,'name') + '" can not be moved inside "' + layers.prop(targetId,'name') + '".');
+                }
+
+                //remove children so we don't flatten the heirarchy
+                if(ignoreHeirarchy !== true) {
+                    children = layers.getChildIds(layerId, true);
+                    moveIds = moveIds.filter(_idFilter);
+                }
+            }
+        }
+
+        // 2nd pass do the actual move
+        // but wait, it gets crazier
+        iCount = moveIds.length;
+        for (i = 0; i < iCount; i++) {
+            layerId = moveIds[0];
+
+            log.log('Moving ' + layers.prop(layerId,'name'));
+            newIndex = layers.prop(targetId,'itemIndex') + indexOffset;
+
+            // NOTE: Moving into layer sets is a headache
+            // But moving layersets into others is literally BUGGED in the api.
+            // But also manually moving to bottom of a set via itemIndex has
+            // broken edgecases such as if there's an empty group as the child
+            // of the target group. Nothing just works like it should.
+
+            switch (placement) {
+                case ElementPlacement.PLACEAFTER:
+                    // if it's a group grab next sibling layer?
+                    if(layers.isGroup(targetId)) {
+                        // tmpLayerId = layers.stack.getNextSiblingLayerId(targetId);
+                        newIndex = layers.groups.getEndIndex(targetId) - 1;
+                        // newIndex = layers.prop(tmpLayerId, 'itemIndex');
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.PLACEATEND:
+                    children = layers.getChildIds(targetId);
+                    // extendscript: there's no reliable way to move to the bottom
+                    // of a layer set.
+                    // me: Hold my beer. Watch this.
+                    if(children.length) {
+                        layers.stack.makeActive(targetId);
+
+                        // get last child in target group
+                        lastChildId = children[children.length-1];
+                        lastChildIndex = layers.prop(lastChildId, 'itemIndex');
+
+                        // add temp layer
+                        tmpLayerId = layers.add().prop('layerId');
+
+                        // move tmp layer above last child
+                        layers.prop(tmpLayerId,'itemIndex',lastChildIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId, 'itemIndex');
+
+                        // now swap last child position with tmp layer
+                        layers.prop(lastChildId, 'itemIndex', tmpLayerIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId,'itemIndex');
+
+                        // should now have very last actual index...
+                        newIndex =  tmpLayerIndex - 1;
+
+                        // Thanks! I hate it.
+                        layers.remove(tmpLayerId);
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.INSIDE:
+                case ElementPlacement.PLACEATBEGINNING:
+                    newIndex --;
+                    break;
+                case ElementPlacement.PLACEBEFORE:
+                default:
+                    //move to same index as target
+                    break;
+            }
+
+            try {
+                layers.prop(layerId, 'itemIndex', newIndex);
+            } catch (e) {
+                throw new Error('There was a problem moving "' + layers.prop(layerId,'name') + '" from index ' + layers.prop(layerId,'itemIndex') + ' to ' + newIndex);
+            }
+        }
+        return layers;
+    };
 
     // Smart Objects
     /**
@@ -8077,6 +8475,13 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      */
     layers.smartObjects = {};
 
+    /**
+     * Make smart object layer active since some SO operations can crash otherwise.
+     * @method      _ensureSmartObjectIsActive
+     * @param       {Number}  layerId layer id of the smart object
+     * @private
+     * @return      {Object}  the layers object for chaining
+     */
     function _ensureSmartObjectIsActive(layerId) {
 
         // Make sure target layer is active
@@ -8088,14 +8493,84 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     }
 
+    /**
+     * Check to see if layer is embedded
+     * @method isEmbedded
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is embedded smart object
+     */
+    layers.smartObjects.isEmbedded = function isEmbedded(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return (soDesc && soDesc.getBoolean(s2id('linked')) === false);
+    };
+
+    /**
+     * Check to see if layer is a linked smart object
+     * @method isLinked
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
+    layers.smartObjects.isLinked = function isLinked(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return  (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.ALIASTYPE);
+    };
+
+    /**
+     * Check to see if layer is a CC Library file (not same as Creative Cloud Document?)
+     * @method isCloudFile
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
+    layers.smartObjects.isCloudFile = function isCloudFile(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var isCloudFile = (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.OBJECTTYPE);
+        return isCloudFile;
+    };
+
+    /**
+     * Get the cached local file path for the CC Library object
+     * @method getCloudFilePath
+     * @param  {Number}         layerId layer id of a cloud smart object
+     * @return {String}                 file path to linked cached file
+     */
+    layers.smartObjects.getCloudFilePath = function getCloudFilePath(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var str;
+        var lookUpFile = new File(Folder.userData + "/Adobe/Creative Cloud Libraries/LIBS/librarylookupfile");
+
+        if (soDesc.getBoolean(s2id('linkMissing'))) {
+            throw new Error("Link missing in Cloud assest. Bad permissions or deteted library.");
+        }
+
+        if (!lookUpFile.exists) {
+            throw new Error("Lookup reference file for cloud assests not found.");
+        }
+
+        lookUpFile.open('r');
+        str = lookUpFile.read();
+        lookUpFile.close();
+
+		var assetUrl = soDesc.getObjectValue(stringIDToTypeID('link')).getString(stringIDToTypeID('elementReference'));
+        var refKeys = assetUrl.split("/adobe-libraries/")[1].split(";node=");
+
+		var lookUpObj = eval('('+str+')');
+		var pathToSo = lookUpObj.libraries[refKeys[0]].elements[refKeys[1]].reps[0].path;
+
+		if(!pathToSo) {
+            throw new Error("Cached cloud file not found in " + pathToSo);
+        }
+
+		return pathToSo;
+	};
+
     /** TODO: coverage for these guys...if possible
 
-        PSString._add("placedLayerConvertToEmbedded");
-        PSString._add("placedLayerConvertToLinked");
-        PSString._add("placedLayerMakeCopy");
+        PSString._add("placedLayerConvertToEmbedded");//DONE
+        PSString._add("placedLayerConvertToLinked");//DONE
+        PSString._add("placedLayerMakeCopy");//DONE
         PSString._add("placedLayerEmbedAll");
         PSString._add("placedLayerExportContents");
-        PSString._add("placedLayerRelinkToFile");
+        PSString._add("placedLayerRelinkToFile");//DONE:set smartobject.link property
         PSString._add("placedLayerRelinkToLibraries");
         PSString._add("placedLayerReplaceContents");
         PSString._add("placedLayerReplaceMissing");
@@ -8107,7 +8582,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Converts the specified layer(s) to a smart object and makes it active.
-     * @param {Number,Array,null} layerId Layer identifier(s), defaults to currently active layer if null or not specified.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
      * @param {Boolean} isLink If true, link instead of embedded smart object.
      * @param {String, File} imageFile Path or File to valid image.
      * @return Chained reference to layer utilities.
@@ -8126,13 +8601,12 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Creates a "New Smart Object via Copy" for embedded or linked smart objects
-     * @param {Number,null} layerId Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {String, File} imageFile Path or File to valid image.
-     * @param {Boolean} [skipPrompt] If true, and no image file passed in, autocreate new file name.
+     * @param {Number} [layerId=Active layer] Layer identifier.
+     * @param {String} [newName] New name for layer or file.
+     * @param {Boolean} [skipPrompt] If true, and no new name passed in, autocreate new file name.
      * @return Chained reference to layer utilities.
      */
-    layers.smartObjects.makeCopy = function (layerId, imageFile, skipPrompt)
-    {
+    layers.smartObjects.makeCopy = function (layerId, newName, skipPrompt) {
         _ensureSmartObjectIsActive(layerId);
 
         var srcLinkPath =  layers.prop('smartObject.link');
@@ -8143,54 +8617,48 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             var searchIdx = srcFile.name.lastIndexOf('.');
 
             var srcLinkExtension = srcFile.name.slice(searchIdx, srcFile.name.length);
-            var srcLinkBaseName = srcFile.name.slice(0,searchIdx);
+            var srcLinkNameNumber;
+            var newLinkFile;
 
-            // try to increment name if numbered
-            var srcLinkNameNumber = srcLinkBaseName.match(/\d*$/)[0];//get numbers off end of basename
-            if(srcLinkNameNumber.length)
-            {
-                srcLinkBaseName = srcLinkBaseName.substr(0,srcLinkBaseName.length-srcLinkNameNumber.length);
-                srcLinkBaseName += Number( Number(srcLinkNameNumber) + 1 ).pad( srcLinkNameNumber.length );
-            }
-            else
-            {
-                srcLinkBaseName += '_02';
-            }
-
-            // New file name... assemble!
-            var newLinkName = srcLinkBaseName+srcLinkExtension;
-
-            // default ask for new file name with autofilled prompt
-            if( !skipPrompt ) {
-                newLinkName = prompt("Enter a name for the new file to be linked...", newLinkName, "New File Name");
-                // sanity check and sanitize
-                if( typeof newLinkName !== "string" ){return;}
-
-                if( newLinkName.search(srcLinkExtension) === -1 )
-                {
-                    newLinkName += srcLinkExtension;
+            if (!newName) {
+                newName = srcFile.name.slice(0,searchIdx);
+                // try to increment name if numbered
+                srcLinkNameNumber = newName.match(/\d*$/)[0];//get numbers off end of basename
+                if(srcLinkNameNumber.length) {
+                    newName = newName.substr(0,newName.length-srcLinkNameNumber.length);
+                    newName += Number( Number(srcLinkNameNumber) + 1 ).pad( srcLinkNameNumber.length );
+                } else {
+                    newName += '_02';
+                }
+                // default ask for new file name with autofilled prompt
+                if( !skipPrompt ) {
+                    newName = prompt("Enter a name for the new file to be linked...", newName, "New File Name");
+                    // sanity check and sanitize
+                    if( typeof newName !== "string" ){return;}
                 }
             }
 
-            newLinkFile = new File (srcFile.parent +"/"+ newLinkName);
-            if( newLinkFile.absoluteURI === srcFile.absoluteURI)
-            {
-                alert ("But... that's the same file... "+newLinkName, "Nooooooo!");
+            // New file name... assemble!
+            newName = newName;
+            if( newName.search(srcLinkExtension) === -1 ) {
+                newName += srcLinkExtension;
+            }
+
+            newLinkFile = new File (srcFile.parent +"/"+ newName);
+            if( newLinkFile.absoluteURI === srcFile.absoluteURI) {
+                alert ("But... that's the same file... "+newName, "Nooooooo!");
                 return;
             }
 
             // Existing file check and overwrite confirmation included in copy()
-            newLinkFile = Lifter.system.files.copy(srcFile, newLinkFile);
+            newLinkFile = Lifter.system.files.copy(srcFile, newLinkFile)[0];
 
             // Verify
             if( typeof newLinkFile === "undefined" ){return;}
-            if( !newLinkFile.exists )
-            {
+            if( !newLinkFile.exists ) {
                 log.error('Error copying file. No file found at destination: '+newLinkFile.name);
                 return;
             }
-
-            var newFilePath = newLinkFile.absoluteURI;
 
             // // ask smart object for "more" info
             var soMoreDesc = layers.prop('smartObjectMore');
@@ -8198,7 +8666,6 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             var compAppliedID = soMoreDesc.getInteger(s2id('comp'));
 
             // get SmartObject's inner canvas size
-            // var sizeKeyDesc = getPropByName(soMoreDesc,'Sz  ');
             var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
             var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
             var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
@@ -8217,19 +8684,20 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             // $.writeln(soY);
             // $.writeln(soScaleX);
             // $.writeln(soScaleY);
-            layers.smartObjects.place(newLinkFile, true, soX, soY, soScaleX, soScaleY);
+            layers.smartObjects.place(newLinkFile, true, soX, soY, soScaleX*100, soScaleY*100);
 
 
             layers.smartObjects.setComp(null, compAppliedID );
         } else {
             executeAction(s2id('placedLayerMakeCopy'), undefined, _dialogModesNo);
+            if(typeof newName === 'string'){ layers.prop('name', newName); }
         }
         return layers;
     };
 
     /**
      * Opens smart object layer for editing.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer identifier.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.edit = function (layerId)
@@ -8243,15 +8711,14 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         Lifter.documents.makeActive(activeDocId);
 
         // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
+        _cache.refresh();
 
         return layers;
     };
 
     /**
      * Place a smart object with for link instead
-     * @param {String, File} imageFile Path or File to valid image.
+     * @param {(String|File)} imageFile Path or File to valid image.
      * @param {Boolean} [isLink] If true, link instead of embedded smart object.
      * @param {Number} [scaleX] Width scale to apply (as percentage SO's internal canvas size).
      * @param {Number} [scaleY] Height scale to apply (percentage SO's internal canvas size).
@@ -8269,13 +8736,14 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 throw new ERROR('User aborted convert to linked object...');
         }
 
-        try
-        {
+        try {
             // Place now, position and scale after.
             var descPlace = new ActionDescriptor();
             var idPrc = c2id( "#Prc" );
             descPlace.putPath( c2id( "null" ), _ensureFile(imageFile) );
             descPlace.putEnumerated( c2id( "FTcs" ), c2id( "QCSt" ), c2id( "Qcsa" ) );
+            descPlace.putUnitDouble( c2id( "Wdth" ), c2id( "#Prc" ), scaleX );
+            descPlace.putUnitDouble( c2id( "Hght" ), c2id( "#Prc" ), scaleY );
 
             if(isLink)
                 descPlace.putBoolean( c2id( "Lnkd" ), true );
@@ -8284,41 +8752,42 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
             var newLinkedLayer = app.activeDocument.activeLayer;
 
-            // ask smart object for "more" info
+            // // ask smart object for "more" info
             var soMoreDesc = layers.prop('smartObjectMore');
-
-            // get SmartObject's inner canvas size
-            var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
-            var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
-            var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
 
             //Get 'nonAffineTransform' for most accurate scale
             var soVertList = soMoreDesc.getList(s2id('nonAffineTransform'));
             var soX = soVertList.getDouble(0);
             var soY = soVertList.getDouble(1);
-            var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
-            var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
 
-            var tgtWidth = (scaleX/100)*soWidthInner;
-            var tgtHeight = (scaleY/100)*soHeightInner;
+            //NOTE: by using the "#Prc" in the place action above we sidestepped
+            // all the resize crap. Only percent not pixels so adjust for dpi before
 
-            // Smart Object scaling is affected by SO internal DPI...
-            var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+            // // get SmartObject's inner canvas size
+            // var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
+            // var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
+            // var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
+            // var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
+            // var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
 
-            var newScaleX = (tgtWidth/soWidthPlaced) / soDPIRatio;
-            var newScaleY = (tgtHeight/soHeightPlaced) / soDPIRatio;
+            // var tgtWidth = (scaleX/100)*soWidthInner;
+            // var tgtHeight = (scaleY/100)*soHeightInner;
 
-            newScaleX *= 100;
-            newScaleY *= 100;
+            // // Smart Object scaling is affected by SO internal DPI...
+            // var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+
+            // var newScaleX = (tgtWidth/soWidthPlaced) / soDPIRatio;
+            // var newScaleY = (tgtHeight/soHeightPlaced) / soDPIRatio;
+
+            // newScaleX *= 100;
+            // newScaleY *= 100;
 
             if( typeof posX == "number" && typeof posY == "number" ) {
                 newLinkedLayer.translate( -( soX - posX ) + " px", -( soY - posY ) + " px" );
             }
 
-            newLinkedLayer.resize(newScaleX,newScaleY, AnchorPosition.TOPLEFT);
-        }
-        catch ( e )
-        {
+            // newLinkedLayer.resize(newScaleX,newScaleY, AnchorPosition.TOPLEFT);
+        } catch ( e ) {
             throw new Error('Can not place new smart object...'+e.message);
         }
 
@@ -8327,8 +8796,8 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Convert a smart object to smart link
-     * @param {Number,Array,null} layerId Layer identifier(s), defaults to currently active layer if null or not specified.
-     * @param {String, File} imageFile Path or File to valid image.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.convertToLinked = function (layerId, imageFile)
@@ -8346,8 +8815,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                     throw new ERROR('User aborted convert to linked object...');
             }
 
-            try
-            {
+            try {
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
 
@@ -8356,9 +8824,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 desc.putReference( c2id( "null" ), ref );
                 desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
                 executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
-            }
-            catch ( e )
-            {
+            } catch ( e ) {
                 throw new Error('Can not convert to linked object...'+e.message);
             }
         }
@@ -8367,9 +8833,69 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     };
 
     /**
+     * Relink existing smart object to a different external file.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.reLinkToFile = function (layerId, imageFile)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop('kind')!==LayerKind.SMARTOBJECT ) {
+            layers.smartObjects.make(layerId, true, imageFile);
+        } else {
+            // should have a single smart object now
+
+            if( !imageFile ) {
+                imageFile = File.openDialog();
+                if(!imageFile)
+                    throw new ERROR('User aborted convert to linked object...');
+            }
+
+            try {
+                var ref = new ActionReference();
+                _getLayerIdRef(layerId, ref);
+
+                var desc = new ActionDescriptor();
+
+                desc.putReference( c2id( "null" ), ref );
+                desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
+                executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
+            } catch ( e ) {
+                throw new Error('Can not convert to linked object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
+     * Embed an existing smart object
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.convertToEmbedded = function (layerId)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop(layerId, 'kind') === LayerKind.SMARTOBJECT && layers.prop(layerId, 'smartObject.link') ) {
+            try {
+                _ensureSmartObjectIsActive(layerId);
+
+                executeAction(s2id('placedLayerConvertToEmbedded'), undefined, _dialogModesNo);
+            } catch ( e ) {
+                throw new Error('Can not convert to embedded object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
      * Sets the layer comp for a Smart Object instance.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {Number} [compID] The unique ID of the layer comp to set instance to.
+     * @param {(Number|null)} layerId Layer identifier, null = active layer.
+     * @param {Number} compID The unique ID of the layer comp to set instance to.
      * @return Chained reference to layer utilities.
      */
     layers.smartObjects.setComp = function (layerId, compID)
@@ -8391,7 +8917,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     // convenience tests... mostly just aliases for layers.prop() calls.
     /**
      * Check for user or vector mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if user or vector mask present on layer.
      */
     layers.masks.hasMask = function (layerId)
@@ -8402,7 +8928,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Check for user (pixel) mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if user mask present on layer.
      */
     layers.masks.hasLayerMask = function (layerId)
@@ -8413,7 +8939,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Check for vector mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if vector mask present on layer.
      */
     layers.masks.hasVectorMask = function (layerId)
@@ -8424,7 +8950,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Check for filter mask on the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return {Boolean} True if filter mask present on layer.
      */
     layers.masks.hasFilterMask = function (layerId)
@@ -8436,7 +8962,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Adds a layer mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addLayerMask = function (layerId)
@@ -8480,7 +9006,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Adds a vector mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addVectorMask = function (layerId)
@@ -8513,7 +9039,8 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Removes the layer mask from the specified layer, optionally applying it.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [apply] Whether to apply the mask to the layer.
      * @return Chained reference to layer utilities.
      */
@@ -8539,8 +9066,9 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     /**
      * Removes the vector mask from the specified layer. "apply" will either apply
      * to the existing layer mask or directly to the layer if no layer mask found.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [apply] Whether to rasterize and apply the mask to the layer.
      * @return Chained reference to layer utilities.
      */
@@ -8593,7 +9121,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      *
      * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [active] Whether to make the layer mask active or not.
      * @return Chained reference to layer utilities.
      */
@@ -8626,7 +9154,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      *
      * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
      *
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [active] Whether to make the vector mask active or inactive.
      * @return Chained reference to layer utilities.
      */
@@ -8669,7 +9197,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [makeVisible] Whether to make the layer mask visible.
     * @return Chained reference to layer utilities.
     */
@@ -8701,7 +9229,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -8731,7 +9259,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -8754,7 +9282,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     *
     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
     *
-    * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * @param {Number} [layerId=Active layer] Layer id.
     * @param {Boolean} [enable] Whether to make the mask affect the layer.
     * @return Chained reference to layer utilities.
     */
@@ -8775,7 +9303,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Creates a selection from the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.selectLayerMask = function (layerId)
@@ -8797,7 +9325,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Creates a selection from the vector mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.selectVectorMask = function (layerId)
@@ -8822,7 +9350,10 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Set mask linked state for both layer and vector masks.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setMaskLink = function ()
@@ -8870,7 +9401,10 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Set mask linked state for layer mask.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setLayerMaskLink = function ()
@@ -8878,14 +9412,17 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         _overloadFunction_Number_Bool(arguments, undefined, true);
 
         if(layers.masks.hasLayerMask(arguments[0])) {
-            layers.prop(arguments[0],'layerMaskLinked',arguments[1]);
+            layers.prop(arguments[0], 'layerMaskLinked', arguments[1]);
         }
     };
 
 
     /**
      * Set mask linked state for vector mask
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.setVectorMaskLink = function ()
@@ -8901,8 +9438,16 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
 
     /**
-     * Refines the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null.
+     * Refines layer mask of specified layer as per Refine Mask workspace
+     * @method
+     * @param {Number} [layerId=Active layer] Layer id
+     * @param  {Number}  edgeBorderRadius   Edge border radius
+     * @param  {Number}  edgeBorderContrast Edge border contrast
+     * @param  {Number}  edgeSmooth         Edge smoothing
+     * @param  {Number}  edgeFeatherRadius  Edge feather radius
+     * @param  {Number}  edgeChoke          Edge choke
+     * @param  {Bool}    edgeAutoRadius     Edge auto radius enabled
+     * @param  {Boolean} edgeDecontaminate  Edge decontamination enabled
      * @return Chained reference to layer utilities.
      */
     layers.masks.refineLayerMask = function (layerId, edgeBorderRadius, edgeBorderContrast, edgeSmooth, edgeFeatherRadius, edgeChoke, edgeAutoRadius, edgeDecontaminate)
@@ -8936,7 +9481,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
     /**
      * Inverts the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id
      * @return Chained reference to layer utilities.
      */
     layers.masks.invertLayerMask = function (layerId)
@@ -8946,6 +9491,294 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         layers.masks.makeLayerMaskVisible(layerId, false);
 
         return layers;
+    };
+
+
+    // Shapes
+    /**
+     * Provides methods to work with masks on layer and layer sets.
+     */
+    layers.shapes = {};
+
+    /**
+     * Gets fill color of selected layer
+     * @return {SolidColor} photoshop SolidColor object from the layer fill
+     */
+    layers.shapes.getFillColor = function () {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+        var ref1 = executeActionGet( ref );
+        var list = ref1.getList( c2id( "Adjs" ) );
+        var solidColorLayer = list.getObjectValue( 0 );
+        var color = solidColorLayer.getObjectValue( s2id( "color" ) );
+        var fillColor = new SolidColor();
+        fillColor.rgb.red = color.getDouble( c2id( 'Rd  ' ) );
+        fillColor.rgb.green = color.getDouble( c2id( 'Grn ' ) );
+        fillColor.rgb.blue = color.getDouble( c2id( 'Bl  ' ) );
+        return fillColor;
+    };
+
+    /**
+     * Sets fill color for selected layer
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setFillColor = function (layerId, fillColor) {
+        fillColor = Lifter.colors.toSolidColor(fillColor);
+
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+
+        var descSet = new ActionDescriptor();
+        var descColor = Lifter.colors.toActionDescriptor(fillColor);
+        descSet.putReference( c2id( 'null' ), ref );
+        descSet.putObject( s2id( "to" ), s2id( 'solidColorLayer' ), descColor );
+        executeAction( s2id( "set" ), descSet, DialogModes.NO );
+
+        return layers;
+    };
+
+    /**
+     * Sets stroke color for selected layer
+     * @param {Boolean} bEnabled    flag for enabled or disabling stroke
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String} [sAlignment]    stroke alignment. Valid strings: "Center","Inside","Outside"
+     * @param {Int}     [iWidth]      stroke width in pixels
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setStroke = function shapeSetStroke( bEnabled, fillColor, iWidth, sAlignment ) {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+        try {
+            var descSet = new ActionDescriptor();
+            ref.putEnumerated( s2id( "contentLayer" ), c2id( "Ordn" ), s2id( "targetEnum" ) );
+            descSet.putReference( c2id( "null" ), ref );
+            // style descriptors
+            var descStroke = new ActionDescriptor();
+            var descStrokeStyle = new ActionDescriptor();
+
+            if ( typeof fillColor === 'object' || typeof fillColor === 'string' ) {
+                var descColor = Lifter.colors.toActionDescriptor(fillColor);
+                descStrokeStyle.putObject( s2id( "strokeStyleContent" ), s2id( "solidColorLayer" ), descColor );
+            }
+
+            if( typeof sAlignment !== "undefined" ) {
+               var idstrokeStyleLineAlignment = s2id( "strokeStyleLineAlignment" );
+               descStrokeStyle.putEnumerated( idstrokeStyleLineAlignment, idstrokeStyleLineAlignment, s2id( "strokeStyleAlign"+sAlignment ) );
+            }
+
+            // descStrokeStyle.putInteger( s2id( "strokeStyleVersion" ), 2 );
+            descStrokeStyle.putBoolean( s2id( "strokeEnabled" ), bEnabled );
+
+            if ( typeof iWidth !== "undefined" ) {
+               descStrokeStyle.putUnitDouble( s2id( "strokeStyleLineWidth" ), c2id( "#Pxl" ), iWidth );
+            }
+
+            descStroke.putObject( s2id( "strokeStyle" ), s2id( "strokeStyle" ), descStrokeStyle );
+            descSet.putObject( s2id( "to" ), s2id( "shapeStyle" ), descStroke );
+
+            executeAction( s2id( "set" ), descSet, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); }
+
+        return layers;
+    };
+
+
+    //TODO: this only does points no curves and untested
+    layers.shapes.drawCustomShape =  function shapesDrawCustomShape( aAnchorPositions , color, opacity, name)
+    {
+        var oSubPath;
+        var oPathItem;
+        var aPathPoints = [];
+        var y = aAnchorPositions.length;
+        var i = 0;
+
+        for (i = 0; i < y; i++) {
+            aPathPoints[i] = new PathPointInfo();
+            aPathPoints[i].kind = PointKind.CORNERPOINT;
+            aPathPoints[i].anchor = aAnchorPositions[i];
+            aPathPoints[i].leftDirection = aPathPoints[i].anchor;
+            aPathPoints[i].rightDirection = aPathPoints[i].anchor;
+        }
+
+        oSubPath = new SubPathInfo();
+        oSubPath.closed = true;
+        oSubPath.operation = ShapeOperation.SHAPEADD;
+        oSubPath.entireSubPath = aPathPoints;
+        oPathItem = app.activeDocument.oPathItems.add("tmpPath", [oSubPath]);
+
+        var descUsng = new ActionDescriptor();
+        var descType = new ActionDescriptor();
+        var descClr = new ActionDescriptor();
+        var descRGB = Lifter.colors.toActionDescriptor(color);
+        var refLyr = new ActionReference();
+
+        refLyr.putClass(s2t("contentLayer"));
+        descUsng.putReference(c2t("null"), refLyr);
+
+        descClr.putObject(s2t( "color" ), s2t( "RGBColor" ), descRGB);
+        descType.putObject(c2t("Type"), s2t("solidColorLayer"), descClr);
+        descUsng.putObject(c2t("Usng"), s2t("contentLayer"), descType);
+
+        // Set Name
+        if( typeof name !== undefined && name.constructor.name === "String")
+        {
+            descClr.putString( charIDToTypeID( "Nm  " ), name );
+        }
+
+        // Set Opacity
+        if( typeof opacity !== undefined && typeof opacity !== null)
+        {
+            descClr.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+        }
+
+        executeAction(s2t( "make" ), descUsng, DialogModes.NO);
+
+        oPathItem.remove();
+    };
+
+
+    /**
+     * Draw rectangular or circular shape layer
+     * @param {String}    [shape="Rectangle"]    "Rectangle" or "Ellipse"
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String}    [name] Name of new shape layer.
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawShape =  function shapesDrawShape(shape, x, y, w, h, options)
+    {
+        var shapeCID;
+        var opts = (isDef(options))? options : {};
+        var color = Lifter.colors.toArray(opts.color);
+        var opacity = opts.opacity;
+        var name = opts.name;
+        var corners = opts.corners;
+        if(typeof opts.corners === 'number') {
+            corners = [opts.corners, opts.corners, opts.corners, opts.corners];
+        } else if (opts.corners instanceof Array && opts.corners.length === 1) {
+            corners = [opts.corners[0], opts.corners[0], opts.corners[0], opts.corners[0]];
+        }
+
+        // not sure if more shape options?
+        switch (shape) {
+            case "Ellipse":
+            case "Elps":
+                shapeCID = "Elps";
+                break;
+            case "Rectangle":
+            case "Rctn":
+            default:
+                shapeCID = "Rctn";//default rectangle
+                break;
+        }
+
+        // desc layer
+        var descUsng = new ActionDescriptor();
+            var refContentLayer = new ActionReference();
+            refContentLayer.putClass( s2id( "contentLayer" ) );
+        descUsng.putReference( c2id( "null" ), refContentLayer );
+        var descColorLayer = new ActionDescriptor();
+
+            // color
+            var descColor = Lifter.colors.toActionDescriptor(color);
+            descColorLayer.putObject( c2id( "Type" ), s2id( "solidColorLayer" ), descColor );
+
+            // shape
+            var descShape = new ActionDescriptor();
+                var idPxl = c2id( "#Pxl" );
+                descShape.putInteger( s2id( "unitValueQuadVersion" ), 1 );
+
+                // Transform corners
+                descShape.putUnitDouble( c2id( "Top " ), idPxl, y );
+                descShape.putUnitDouble( c2id( "Left" ), idPxl, x );
+                descShape.putUnitDouble( c2id( "Btom" ), idPxl, y+h );
+                descShape.putUnitDouble( c2id( "Rght" ), idPxl, x+w );
+
+                // Rounded corner values
+                if( typeof corners !== 'undefined' && corners.length === 4) {
+                    descShape.putUnitDouble( s2id( "topLeft" ), idPxl, corners[0] );
+                    descShape.putUnitDouble( s2id( "topRight" ), idPxl, corners[1] );
+                    descShape.putUnitDouble( s2id( "bottomRight" ), idPxl, corners[2] );
+                    descShape.putUnitDouble( s2id( "bottomLeft" ), idPxl, corners[3] );
+                }
+
+            descColorLayer.putObject( c2id( "Shp " ), c2id( shapeCID ), descShape );
+
+            // Set Opacity
+            if( typeof opacity !== 'undefined' && typeof opacity !== null) {
+                descColorLayer.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+            }
+
+        descUsng.putObject( c2id( "Usng" ), s2id( "contentLayer" ), descColorLayer );
+
+        try {
+            executeAction( c2id( "Mk  " ), descUsng, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); return; }
+
+        // Set Name
+        if( isDef(name) && typeof name === "string") {
+            layers.prop('name', name);
+        }
+
+        return layers.prop('layerId');
+    };
+
+    /**
+     * Draw circular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawEllipse = function shapesDrawEllipse(x, y, w, h, opts)
+    {
+        return this.drawShape( "Ellipse", x, y, w, h, opts);
+    };
+
+    /**
+     * Draw rectangular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawRect = function shapesDrawRect(x, y, w, h, opts)
+    {
+        return this.drawShape( "Rectangle", x, y, w, h, opts);
     };
 
 
@@ -9026,6 +9859,9 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      * with than ItemIndexes because are unique and does not changed based on whether a background
      * layer is present in the document (see below).
      *
+     * Most functions default a null or undefined value passed to a layer id argument to reference the currently
+     * active layer. It is a huge convenience but also a debugging nightmare. Check your inputs and act accordingly.
+     *
      * Some brief notes about ItemIndexes: they behave differently when the background layer
      * is present in the document:
      *
@@ -9038,7 +9874,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      * non-background layer is present in the document. This is true for LayerIds too.
      */
     Lifter.layers = layers;
-    log.log("Lifter.layers done...");
+    log.debug("Lifter.layers done...");
 }());
 
 /**
@@ -9059,7 +9895,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
 ; (function ()
 {
-    log.log("LOADING Lifter.selection ...");
+    log.debug("LOADING Lifter.selection ...");
 
     var selection = {};
 
@@ -9504,7 +10340,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     * Contains low-level methods to work with selections without accessing Photoshop DOM.
     */
     Lifter.selection = selection;
-    log.log("Lifter.selection done.");
+    log.debug("Lifter.selection done.");
 }());
 
 /**
@@ -9525,7 +10361,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
 ; (function ()
 {
-    log.log("LOADING Lifter.system ...");
+    log.debug("LOADING Lifter.system ...");
     var system = {};
     //var log = Lifter.log;
 
@@ -9580,7 +10416,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             cmd = (isDir)?'explorer.exe /n, ':'explorer.exe /select, ';
         }
         cmd += '\"' + new File(theFile).fsName + '\"';
-        log.info("Browse to command: " + cmd);
+        log.info("Browse to command: " + cmd.replace(/\\/g,'/').replace(/"/g,'\\"'));
         app.system(cmd);
     };
 
@@ -9621,19 +10457,16 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         // if string, wrap in array
         if(typeof masks === "string"){ masks = [masks];}
 
-        for(var m=0; m<masks.length; m++)
-        {
+        for(var m=0; m<masks.length; m++) {
             reMask = masks[m];
 
             // convert text filters like "*.txt" to regex
-            if(typeof reMask == "string")
-            {
+            if(typeof reMask == "string") {
                 reMask = reMask.replace(/\./g,"\\.").replace(/\*/g,".*");
                 reMask =  new RegExp(reMask+"$");
             }
 
-            if(typeof reMask == "function" && fileName.search(reMask) !== -1)
-            {
+            if(typeof reMask == "function" && fileName.search(reMask) !== -1) {
                 result = (!isExclude)?true:false;
                 break;
             }
@@ -9662,10 +10495,9 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
 
         // create folder if missing
         if (!inFolder.exists) {
-            log.log("Creating new folder: " + inFolder.fsName);
+            log.debug("Creating new folder: " + inFolder.fsName);
             try {
-                if( inFolder.create() === false )
-                {
+                if( inFolder.create() === false ) {
                     log.error( "copyFiles: error creating directory "+inFolder.fsName);
                     return 0;
                 }
@@ -9673,8 +10505,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 log.error(e.message);
                 return 0;
             }
-        } else if ( inFolder.readonly )
-        {
+        } else if ( inFolder.readonly ) {
             log.error( "copyFiles: directory is read only "+inFolder.fsName);
             return 0;
             // make writeable
@@ -9683,63 +10514,17 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         return 1;
     };
 
-    /**
-     * Recursively remove directory folder
-     * @param  {Folder/String} folder folder or path to remove
-     * @return {Boolean}       success result like folder.create()
-     */
-    system.files.removeDir = function removeDir( srcFolder ) {
-        srcFolder = new Folder(srcFolder);
-
-        // create folder if missing
-        if (srcFolder.exists)
-        {
-            // get file list from folder
-            srcFiles = srcFolder.getFiles( );
-
-            log.log( "\n---  system.files.removeDir  ---" );
-            log.log( 'Folder: ' + srcFolder );
-            log.log( 'Items: ' + srcFiles.length );
-            srcFiles.forEach(function(srcFile){
-                log.log(' - '+srcFile.name);
-            });
-
-
-            srcFiles.forEach(function(srcFile){
-
-                //if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
-                //srcFile = srcFiles[f];
-                // srcFile.readonly = false;
-
-                if (srcFile instanceof File)
-                {
-                    remResult = srcFile.remove();// user deleted
-        		}
-                else if (srcFile instanceof Folder)
-                {
-                    system.files.removeDir(srcFile);
-                }
-                else
-                {
-                    log.log ("Don't know if I can remove this?\n"+srcFile);
-                }
-            });
-
-            // close the door on your way out...
-            return srcFolder.remove();// user deleted
-        }
-        return 1;
-    };
 
     /**
      * Recurseively copy a file or folder path with options and dialogs
-     * @param  {File/Folder/String} src     Source file (can be a string)
-     * @param  {File/Folder/String} dst     Destination path (can be a string)
+     * @param  {File/Folder} src     Source file or folder
+     * @param  {File/Folder/String} dst     Destination file or folder
      * @param  {Object} options     Options to override defaults...
      *                                  {
      *                                     overwrite: true,// overwrite existing files
      *                                     silent: false,// no dialogs
      *                                     unlock:true,// unlock read-only files after copy
+     *                                     nameOnly: true,// only test filename not full path for mask and excludes
      *                                     masks:[],//file masks (i.e. ["*.psd","*.tif"])
      *                                     excludes:[],//files to exclude (i.e. ["*.config","node_modules"])
      *                                     replacements:[]// list of pairs to replace in file name. ex. [["tmp","TheThing"],[" ","_"]]
@@ -9748,27 +10533,24 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      */
     system.files.copy = function copyFiles( src, dst, options ) {
         // mutable vars accept file path or File/Folder handle...
-        var srcFile = new File(src);
-        var dstFile = new File(dst);
-
-        // if folder, pass to copyDir like a snake eating its tail
-        if (File(srcFile) instanceof Folder)
-        {
-            return system.files.copyDir(src, dst, options);
-        }
+        var srcFile = src;
+        var dstFile = dst;
+        var isFolder = File(srcFile) instanceof Folder;
+        var maskResult = true;
+        var excludeResult = true;
+        var newFile;
+        var newFileName;
+        var newFilePath;
+        var newFolder =  dstFile.parent;
+        var subFiles;
+        var subFile;
+        var newSubFile;
+        var result = [];// return val is array
 
         // if dst is folder, copy file name from src
-        if (File(dstFile) instanceof Folder)
-        {
-            dstFile = new File(dstFile.fsName+"/"+srcFile.name);
-        }
-
-        var newFile;
-
-        var newFileName,
-            newFilePath;
-
-        var newFolder = dstFile.parent;
+        // if (isFolder) {
+        //     dstFile = new Folder(dstFile.fsName+"/"+srcFile.name);
+        // }
 
         // Passed Options
         if(typeof options !== "object") options = {};
@@ -9777,12 +10559,15 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 overwrite: true,
                 silent: false,
                 unlock:true,
+                nameOnly:true,
                 masks:[],
                 excludes:[],
                 replacements:[],
                 dialogId:1038876
             }
         );
+
+        var maskPathType = (options.nameOnly)? 'name' : 'absoluteURI';
 
         // Dialog setup
         var dialogId = 1038876;
@@ -9792,103 +10577,282 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         var dialogResult;
         Lifter.dialogs.clearCached(dialogId);// clear or subsequent non-recursive calls pick up old input
 
-        // log.log( "---  src  ---" );
-        // log.log( src );
+        log.log( "\n[]------  system.files.copy()  ------[]" );
+        // log.log( "options:" );
+        // for(var opt in options) {
+        //     if( !options.hasOwnProperty (opt) ) continue;
+        //     log.log( "- "+opt+" : " + options[opt] );
+        // }
 
-        log.log( "\n[]------  system.files.copy()  ------[]\n" );
-
-        log.log( "options:" );
-        for(var opt in options)
-        {
-            if( !options.hasOwnProperty (opt) ) continue;
-            log.log( "-- "+opt+":" + options[opt] );
-        }
-
-        log.log( "Src File: \n" + srcFile );
-        log.log( "Dst File: \n" + dstFile );
+        // log.log( "Src File: " + srcFile );
+        // log.log( "Dst File: " + dstFile );
 
         // sanity check
-        log.log( "srcFile.exists "+srcFile.exists );
-        // log.log( "srcFile.fsName "+srcFile.fsName );
+        // log.log( "srcFile.exists "+srcFile.exists );
         if (!srcFile.exists || srcFile.name === ".DS_Store") { return; }
 
-        // create folder if missing
-        if(!system.files.makeDir(newFolder)) { return; }
-
-        // Mask tests to filter files
-        if(system.files.maskTest(srcFile.name, options.masks) === false){return;}
-        if(system.files.excludeTest(srcFile.name, options.excludes) === false){return;}
-
-        // replace text in file name
+        // replace text in file name and path
         newFileName = dstFile.name;
-        for(var r=0;r<options.replacements.length;r++)
-        {
+        for(var r=0;r<options.replacements.length;r++) {
             var rep = options.replacements[r];
             newFileName = newFileName.replace(new RegExp(rep[0],'g'),rep[1]);
+
+            if(!options.nameOnly) {
+                newFolder = new Folder(newFolder.absoluteURI.replace(new RegExp(rep[0],'g'),rep[1]));
+            }
         }
 
         newFilePath = newFolder.fsName + "/" + newFileName;
-
-        log.log("\n-- Src:\n"+srcFile.fsName);
-        log.log("\n-- Dst:\n"+new Folder(newFilePath).fsName);
-
-
         newFile = File(newFilePath);
-        log.log("\n--- exists "+newFile.exists+" ---");
 
-        // if file exists and not silent mode, bring up confirm dialog
-        if (newFile.exists && options.silent === false && typeof Lifter.dialogs.confirm === "function")
-        {
-            // Message
-            if(!newFile.readonly)
-            {
-                dialogArgs.text = "\"" + newFile.name + "\" already exists. Do you want to overwrite it?";
-            }else{
-                dialogArgs.text = "\"" + newFile.name + "\" is set to Read-Only. It may be locked by Perforce. Do you want to overwrite it?";
-            }
+        // Mask tests to filter files
+        maskResult = system.files.maskTest(srcFile[maskPathType], options.masks);
+        excludeResult = system.files.excludeTest(srcFile[maskPathType], options.excludes);
+        // excluded exits
+        if(!excludeResult) { return; }
+        // masks let directories pass through
+        if(!maskResult && !isFolder) { return; }
 
-            dialogResult = Lifter.dialogs.confirm (dialogArgs);
-            dialogCache = Lifter.dialogs.getCached(dialogId);
-
-            options.overwrite = (dialogCache && dialogCache.value !== 1);
-            options.silent = (dialogCache && dialogCache.skip === true);
-
-            log.log("dialogResult: " + (dialogResult));
-            log.log("dialogCache: " + (dialogCache));
-            // log.log("dialogCache.value: " + (dialogCache.value));
-            // for(var opt in options)
-            // {
-            //     if( !options.hasOwnProperty (opt) ) continue;
-            //     log.log( opt+":" + options[opt] );
-            // }
+        // don't make new directory unless mask passes or is file
+        if(maskResult || !isFolder) {
+            if(!system.files.makeDir(newFolder)) { return; }
         }
 
-        // Copy or skip?
-        if( !newFile.exists || options.overwrite )
-        {
-            try {
-                srcFile.copy(newFilePath);
-            } catch (e) {
-                log.error(e.message);
-                return;// "error:copyFiles:could not copy file "+newFilePath+":"+ e.message;
+        log.log("-- Src: "+srcFile.fsName);
+        log.log("-- Dst: "+new Folder(newFilePath).fsName);
+
+
+        log.log("--- newFile.exists "+newFile.exists+" ---");
+
+        // if src is folder process children
+        if (isFolder) {
+            // have to redefine from File to Folder or getFiles() breaks
+            srcFile = new Folder(srcFile);
+            // get file list from folder
+            subFiles = srcFile.getFiles();
+
+            //log.log( "\n---  dir  ---" );
+            // log.log( '  SubFiles: ' + subFiles.length );
+            // subFiles.forEach(function(subFile){
+            //     log.log('   - '+subFile.name);
+            // });
+
+            for (var f in subFiles) {
+                if( !subFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
+                subFile = subFiles[f];
+                // have to be explicitly defined in case we recurse with nonexistent folder
+                if (subFile instanceof File) {
+                    newSubFile = new File(newFile.fsName + "/" + subFile.name);
+        		} else {
+                    newSubFile = new Folder(newFile.fsName + "/" + subFile.name);
+                }
+                result = result.concat(system.files.copy(subFile, newSubFile, options));
             }
-
-            // Sanity check and return error if missing
-            newFile = File(newFilePath);
-            if (! newFile.exists){
-                log.error("copyFiles:file not created "+newFilePath+ ", "+ newFile.error);
-                return;
-            }
-
-            // make writeable
-            if(options.unlock) newFile.readonly = false;
-
-            // return copied file
-            return newFile;
-        } else {
-            log.log ("User skipped this one...");
         }
+        else {
+            // if file exists and not silent mode, bring up confirm dialog
+            if (newFile.exists && options.silent === false && typeof Lifter.dialogs.confirm === "function") {
+                // Message
+                if(!newFile.readonly) {
+                    dialogArgs.text = "\"" + newFile.name + "\" already exists. Do you want to overwrite it?";
+                }
+                else {
+                    dialogArgs.text = "\"" + newFile.name + "\" is set to Read-Only. It may be locked by Perforce. Do you want to overwrite it?";
+                }
+
+                dialogResult = Lifter.dialogs.confirm (dialogArgs);
+                dialogCache = Lifter.dialogs.getCached(dialogId);
+
+                options.overwrite = (dialogCache && dialogCache.value !== 1);
+                options.silent = (dialogCache && dialogCache.skip === true);
+
+                log.debug("dialogResult: " + (dialogResult));
+                log.debug("dialogCache: " + (dialogCache));
+                // log.log("dialogCache.value: " + (dialogCache.value));
+                // for(var opt in options)
+                // {
+                //     if( !options.hasOwnProperty (opt) ) continue;
+                //     log.log( opt+":" + options[opt] );
+                // }
+            }
+
+            // Copy or skip?
+            if( !newFile.exists || options.overwrite ) {
+                try {
+                    srcFile.copy(newFilePath);
+                } catch (e) {
+                    log.error(e.message);
+                    return;// "error:copyFiles:could not copy file "+newFilePath+":"+ e.message;
+                }
+
+                // Sanity check and return error if missing
+                newFile = File(newFilePath);
+                if (! newFile.exists) {
+                    log.error("copyFiles:file not created "+newFilePath+ ", "+ newFile.error);
+                    return;
+                }
+
+                // make writeable
+                if(options.unlock) newFile.readonly = false;
+
+                // return copied file wrapped in array
+                result = [newFile];
+            } else {
+                log.log ("User skipped this one...");
+            }
+        }
+        // return list of copied files
+        return result;
     };
+    // system.files.copy = function copyFiles( src, dst, options ) {
+    //     // mutable vars accept file path or File/Folder handle...
+    //     var srcFile = new File(src);
+    //     var dstFile = new File(dst);
+    //
+    //     // if folder, pass to copyDir like a snake eating its tail
+    //     if (File(srcFile) instanceof Folder)
+    //     {
+    //         return system.files.copyDir(src, dst, options);
+    //     }
+    //
+    //     // if dst is folder, copy file name from src
+    //     if (File(dstFile) instanceof Folder)
+    //     {
+    //         dstFile = new File(dstFile.fsName+"/"+srcFile.name);
+    //     }
+    //
+    //     var newFile;
+    //
+    //     var newFileName,
+    //         newFilePath;
+    //
+    //     var newFolder = dstFile.parent;
+    //
+    //     // Passed Options
+    //     if(typeof options !== "object") options = {};
+    //     options.defaults(
+    //         {
+    //             overwrite: true,
+    //             silent: false,
+    //             unlock:true,
+    //             nameOnly:true,
+    //             masks:[],
+    //             excludes:[],
+    //             replacements:[],
+    //             dialogId:1038876
+    //         }
+    //     );
+    //
+    //     var maskPathType = (options.nameOnly)? 'name' : 'absoluteURI';
+    //
+    //     // Dialog setup
+    //     var dialogId = 1038876;
+    //     var dialogArgs = { id:dialogId, skippable:true, buttons:["OK","Skip"]};
+    //         dialogArgs.title = "Overwrite File?";
+    //         dialogArgs.text = "Do you want to overwrite existing files?";
+    //     var dialogResult;
+    //     Lifter.dialogs.clearCached(dialogId);// clear or subsequent non-recursive calls pick up old input
+    //
+    //     // log.log( "---  src  ---" );
+    //     // log.log( src );
+    //
+    //     log.log( "\n[]------  system.files.copy()  ------[]" );
+    //     log.log( "options:" );
+    //     for(var opt in options)
+    //     {
+    //      if( !options.hasOwnProperty (opt) ) continue;
+    //      log.log( "- "+opt+":" + options[opt] );
+    //     }
+    //
+    //     // log.log( "Src File: " + srcFile );
+    //     // log.log( "Dst File: " + dstFile );
+    //
+    //     // sanity check
+    //     // log.log( "srcFile.exists "+srcFile.exists );
+    //     // log.log( "srcFile.fsName "+srcFile.fsName );
+    //     if (!srcFile.exists || srcFile.name === ".DS_Store") { return; }
+    //
+    //     // Mask tests to filter files
+    //
+    //     if(system.files.maskTest(srcFile[maskPathType], options.masks) === false){return;}
+    //     if(system.files.excludeTest(srcFile[maskPathType], options.excludes) === false){return;}
+    //
+    //     // create folder if missing
+    //     if(!system.files.makeDir(newFolder)) { return; }
+    //
+    //     // replace text in file name
+    //     if(options.nameOnly) {
+    //
+    //     }
+    //     newFileName = dstFile.name;
+    //     for(var r=0;r<options.replacements.length;r++)
+    //     {
+    //         var rep = options.replacements[r];
+    //         newFileName = newFileName.replace(new RegExp(rep[0],'g'),rep[1]);
+    //     }
+    //
+    //     newFilePath = newFolder.fsName + "/" + newFileName;
+    //
+    //     log.log("-- Src: "+srcFile.fsName);
+    //     log.log("-- Dst: "+new Folder(newFilePath).fsName);
+    //
+    //
+    //     newFile = File(newFilePath);
+    //     log.log("--- newFile.exists "+newFile.exists+" ---");
+    //
+    //     // if file exists and not silent mode, bring up confirm dialog
+    //     if (newFile.exists && options.silent === false && typeof Lifter.dialogs.confirm === "function")
+    //     {
+    //         // Message
+    //         if(!newFile.readonly)
+    //         {
+    //             dialogArgs.text = "\"" + newFile.name + "\" already exists. Do you want to overwrite it?";
+    //         }else{
+    //             dialogArgs.text = "\"" + newFile.name + "\" is set to Read-Only. It may be locked by Perforce. Do you want to overwrite it?";
+    //         }
+    //
+    //         dialogResult = Lifter.dialogs.confirm (dialogArgs);
+    //         dialogCache = Lifter.dialogs.getCached(dialogId);
+    //
+    //         options.overwrite = (dialogCache && dialogCache.value !== 1);
+    //         options.silent = (dialogCache && dialogCache.skip === true);
+    //
+    //         log.debug("dialogResult: " + (dialogResult));
+    //         log.debug("dialogCache: " + (dialogCache));
+    //         // log.log("dialogCache.value: " + (dialogCache.value));
+    //         // for(var opt in options)
+    //         // {
+    //         //     if( !options.hasOwnProperty (opt) ) continue;
+    //         //     log.log( opt+":" + options[opt] );
+    //         // }
+    //     }
+    //
+    //     // Copy or skip?
+    //     if( !newFile.exists || options.overwrite )
+    //     {
+    //         try {
+    //             srcFile.copy(newFilePath);
+    //         } catch (e) {
+    //             log.error(e.message);
+    //             return;// "error:copyFiles:could not copy file "+newFilePath+":"+ e.message;
+    //         }
+    //
+    //         // Sanity check and return error if missing
+    //         newFile = File(newFilePath);
+    //         if (! newFile.exists){
+    //             log.error("copyFiles:file not created "+newFilePath+ ", "+ newFile.error);
+    //             return;
+    //         }
+    //
+    //         // make writeable
+    //         if(options.unlock) newFile.readonly = false;
+    //
+    //         // return copied file wrapped in array
+    //         return [newFile];
+    //     } else {
+    //         log.log ("User skipped this one...");
+    //     }
+    // };
 
 
     /**
@@ -9900,6 +10864,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      *                                     overwrite: true,// overwrite existing files
      *                                     silent: false,// no dialogs
      *                                     unlock:true,// unlock read-only files after copy
+     *                                     nameOnly: true,// only test filename not full path for mask and excludes
      *                                     masks:[],//file masks (i.e. ["*.psd","*.tif"])
      *                                     excludes:[],//files to exclude (i.e. ["*.config","node_modules"])
      *                                     replacements:[]// list of pairs to replace in file name. ex. [["tmp","TheThing"],[" ","_"]]
@@ -9908,8 +10873,19 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
      */
     system.files.copyDir = function copyDir( src, dst, options ) {
         // mutable vars accept file path or File/Folder handle...
-        var srcFolder = (typeof src == 'string')? new Folder(src): src;
-        var newFolder = (typeof dst == 'string')? new Folder(dst): dst;
+        var srcFolder = new Folder(src);
+        var newFolder = new Folder(dst);
+        var maskTest = true;
+        var excludeTest = true;
+        var srcFiles,
+            srcFile;
+
+        var newFile,
+            newFilePath;
+
+        var newSubFolder;
+
+        var result = [];// return val is array
 
         // if single file, pass to system.files.copy like a snake eating its tail
         if (File(srcFolder) instanceof File)
@@ -9917,11 +10893,8 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             return [system.files.copy(src, dst, options)];// return an array!
         }
 
-        var srcFiles,
-            srcFile;
-
-        var newFileName,
-            newFilePath;
+        // log.log( "---  src  ---" );
+        // log.log( src );
 
         // Passed Options
         if(typeof options !== "object") options = {};
@@ -9930,35 +10903,38 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 overwrite: true,
                 silent: false,
                 unlock:true,
+                nameOnly: true,
                 masks:[],
                 excludes:[],
                 replacements:[]
             }
         );
+        var maskPathType = (options.nameOnly)? 'name' : 'absoluteURI';
 
-        // return val
-        var result = [];
 
-        // log.log( "---  src  ---" );
-        // log.log( src );
-
-        log.log( "\n[]------  copyFiles  ------[]\n" );
-
-        log.log( "options: \n" );
+        log.log( "\n[]------  system.files.copyDir()  ------[]" );
+        log.log( "options:" );
         for(var opt in options)
         {
-            if( !options.hasOwnProperty (opt) ) continue;
-            log.log( "-- "+opt+":" + options[opt] );
+         if( !options.hasOwnProperty (opt) ) continue;
+         log.log( "- "+opt+":" + options[opt] );
         }
 
-        log.log( "Src Dir: \n" + src );
-        log.log( "Dst Dir: \n" + dst );
+        log.log( "Src Dir: " + src );
+        log.log( "Dst Dir: " + dst );
 
         // sanity check
         if (!srcFolder.exists) { return; }
 
         // create folder if missing
-        if(!system.files.makeDir(newFolder)) { return; }
+        // Mask tests to filter folders... but just to avoid making
+        // random empty directories, don't stop the search.
+        maskTest = system.files.maskTest(srcFolder[maskPathType], options.masks);
+        excludeTest = system.files.excludeTest(srcFolder[maskPathType], options.excludes);
+
+        if(maskTest && excludeTest) {
+            if(!system.files.makeDir(newFolder)) { return; }
+        }
         //log.log( "---  newFolder  ---" );
         //log.log( newFolder );
 
@@ -9971,37 +10947,41 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
             log.log(' - '+srcFile.name);
         });
 
-        for (var f in srcFiles)
-        {
+        for (var f in srcFiles) {
             if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
             srcFile = srcFiles[f];
 
             newFilePath = newFolder.fsName + "/" + srcFile.name;
 
-            if (srcFile instanceof File)
-            {
-                var newFile = system.files.copy(srcFile,newFilePath,options);
+            if (srcFile instanceof File) {
+                newFile = system.files.copy(srcFile,newFilePath,options);
                 if(newFile) {
-                    result.concat(newFile);
+                    result = result.concat(newFile);
                 }
     		}
-            else if (srcFile instanceof Folder)
-            {
+            else if (srcFile instanceof Folder) {
 
-                var newSubFolder = new Folder(newFilePath);
-
-                try {
-
-                    if( newSubFolder.create() === false )
-                    {
-                        log.error("copyFiles:error creating sub-directory "+newSubFolder.fsName);
-    	                return;
-                    }
-                } catch (e) {
-                    log.error(e.message);
-                    return;
-                }
-                result = system.files.copyDir(srcFile, newSubFolder, options);
+                // newSubFolder = new Folder(newFilePath);
+                //
+                // // Mask tests to filter folders... but just to avoid making
+                // // random empty directories, don't stop the search.
+                // maskTest = system.files.maskTest(srcFolder.absoluteURI, options.masks);
+                // excludeTest = system.files.excludeTest(srcFolder.absoluteURI, options.excludes);
+                // if(maskTest && excludeTest) {
+                //     try {
+                //
+                //         if( newSubFolder.create() === false )
+                //         {
+                //             log.error("copyFiles:error creating sub-directory "+newSubFolder.fsName);
+        	    //             return;
+                //         }
+                //     } catch (e) {
+                //         log.error(e.message);
+                //         return;
+                //     }
+                // }
+                // result = result.concat(system.files.copyDir(srcFile, newSubFolder, options));
+                result = result.concat(system.files.copyDir(srcFile, newFilePath, options));
             }
             else {
                 log.log ("Skipping this one...");
@@ -10011,43 +10991,48 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         return result;
     };
 
-
     /**
-     * Recurseively remove a file or folder path with options and dialogs
-     * @param  {File/Folder/String} src     Source file/folder (can be a string)
-     * @return {Array}         Resulting list of File objects that were copied.
+     * Recursively remove directory folder
+     * @param  {Folder/String} folder folder or path to remove
+     * @return {Boolean}       success result like folder.create()
      */
-    system.files.remove = function copyFiles( src, dst, options )
-    {
-        // mutable vars accept file path or File/Folder handle...
-        var srcFolder = (typeof src == 'string')? new Folder(src): src;
-        var newFolder = (typeof dst == 'string')? new Folder(dst): dst;
+    system.files.removeRecursively = function removeRecursively( srcFolder ) {
+        srcFolder = new Folder(srcFolder);
 
-        var srcFiles,
-            srcFile,
-            newFile;
+        if (srcFolder.exists) {
+            // get file list from folder
+            srcFiles = srcFolder.getFiles();
 
-        // sanity check
-        if (!srcFolder.exists) { return; }
+            log.debug( "\n---  system.files.removeRecursively  ---" );
+            log.debug( 'Folder: ' + srcFolder );
+            log.debug( 'Items: ' + srcFiles.length );
+            srcFiles.forEach(function(srcFile){
+                log.debug(' - '+srcFile.name);
+            });
 
-        log.log( "\n[]------  copyFiles  ------[]\n" );
 
-        log.log( "Src: \n" + srcFolder );
+            srcFiles.forEach(function removeFile(srcFile) {
+                //if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
+                //srcFile = srcFiles[f];
+                // srcFile.readonly = false;
 
-        srcFiles = srcFolder.getFiles( );
+                if (srcFile instanceof File) {
+                    remResult = srcFile.remove();
+        		}
+                else if (srcFile instanceof Folder) {
+                    system.files.removeRecursively(srcFile);
+                }
+                else {
+                    log.debug ("Don't know if I can remove this?\n"+srcFile);
+                }
+            });
 
-        log.log( 'Items: ' + srcFiles.length );
-        srcFiles.forEach(function(srcFile){
-            log.log(' - '+srcFile.name);
-        });
-
-        for (var f in srcFiles)
-        {
-            if( !srcFiles.hasOwnProperty (f) ) continue;// sanity check for shims on for/in loops
-            srcFile = srcFiles[f];
+            // close the door on your way out...
+            return srcFolder.remove();// user deleted
         }
-
+        return 1;
     };
+
 
     // Public API
     /**
@@ -10055,7 +11040,7 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
     */
     Lifter.system = Lifter.sys = system;
 
-    log.log("Lifter.system done.");
+    log.debug("Lifter.system done.");
 }());
 
 log.log("Lifter is ready now.");
