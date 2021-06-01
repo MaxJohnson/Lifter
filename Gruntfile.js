@@ -24,10 +24,13 @@ module.exports = function (grunt)
         release_dir = 'build/release',
 
         // Common
+        oldshim = [
+            'src/libs/es5/es5-shim.js'
+        ],
         libs = [
             'src/build/libs_header.js',
+            'src/libs/es5/extendscript-es5-shim.js',
             'src/libs/json3.js',
-            'src/libs/es5-shim.js',
             'src/libs/polyfills.js',
             'src/libs/extendscript_logfile.jsxinc',
             'src/libs/extendscript_log.jsxinc',
@@ -37,7 +40,7 @@ module.exports = function (grunt)
         header = ['src/build/header.js'],
         dev_flag = ['src/build/header_dev.js'],
         footer = ['src/build/footer.js'],
-        core = ['src/lifter.js', 'src/core/core.js', 'src/core/utils.js'],
+        core = ['src/lifter.js', 'src/core/core.js', 'src/core/utils.js','src/core/colors.js'],
 
         // Single builds
         builds = {
