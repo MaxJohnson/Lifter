@@ -479,7 +479,9 @@
               for (length = stack.length; length--;) {
                 if (stack[length] === value) {
                   // Cyclic structures cannot be serialized by `JSON.stringify`.
-                  throw TypeError();
+                  // throw TypeError();
+                  // instead let's just pass the error as value and not explode ok?
+                  value = TypeError();
                 }
               }
               // Add the object to the stack of traversed objects.
