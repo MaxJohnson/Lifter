@@ -59,6 +59,111 @@
         }
     }
 
+    function _isSupportedExtension(inPath, category) {
+        var extension = inPath.slice(inPath.lastIndexOf('.'), inPath.length).toUpperCase();
+        var fileTypesLookup = documents.fileTypeSupport[(typeof category === 'string')? category : 'all'];
+        var prop;
+
+        for(prop in fileTypesLookup) {
+            if ( fileTypesLookup.hasOwnProperty( prop ) )
+            {
+                if(fileTypesLookup[prop].indexOf(extension) >= 0 ) { return true; }
+            }
+        }
+        // log.log('indexOf(' + extension + ') = ' + supported.indexOf(extension));
+        return false;
+    }
+
+    /**
+     * Supported document extensions. This is public so that additional properties can be added at runtime.
+     * 'all' can be opened or imported
+     * 'native' can be edited and saveIdList
+     * 'layered' can contain photoshop layers
+     */
+    documents.fileTypeSupport = {
+        'open' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            '3D Studio': ['.3DS'],
+            'Collada DAE': ['.DAE'],
+            'Google Earth 4 KMZ': ['.KMZ'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'WavefrontlOBJ': ['.OBJ'],
+            'Audio': ['.AAC', '.AC3', '.M2A', '.M4A', '.MP2', '.MP3', '.WMA', '.WM'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Camera Raw': ['.TIF', '.CRW', '.NEF', '.RAF', '.ORF', '.MRW', '.DCR', '.MOS', '.RAW', '.PEF', '.SRF', '.ONG', ',X3F', '.CR2', '.ERF', '.SR2', '.KOC', '.MFW', '.MEF', '.ARW', '.NRW', '.RW2', '.RWL', '.IIQ', ',3FR', '.FFF', '.SRW', '.GPR', '.DXO', '.HEIC', '.ARQ', '.CR3'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'Photoshop EPS': ['.EPS'],
+            'Photoshop DCS 1.0': ['.EPS'],
+            'Photoshop DCS 2.0': ['.EPS'],
+            'EPS TIFF Preview': ['.EPS'],
+            'Generic EPS': ['.EPS', '.Al3', '.Al4', '.AI5', '.Al6', '.Al7', '.Al8', '.PS', '.Al', '.EPSF', '.EPSP'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'Multi-Picture Format': ['.MPO'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDF', '.PDP'],
+            'Photoshop Raw': ['.RAW'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG', '.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'SVG': ['.SVG', '.SVGZ'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'U3D': ['.U3D'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'edit' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDP'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'layers' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'Photoshop PDF': ['.PDP'],
+            'TIFF': ['.TIF', '.TIFF']
+        }
+    };
+
 
     /**
      * Supported document properties. This is public so that additional properties can be added at runtime.
@@ -377,6 +482,40 @@
         desc2.putObject(c2id('Nw  '), c2id('Dcmn'), desc);
         executeAction(c2id('Mk  '), desc2, _dialogModesNo);
         return documents;
+    };
+
+
+
+
+
+    /**
+     * Check if photoshop can open or import a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can open or import the file type.
+     */
+    documents.fileTypeCanOpen = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'open');
+    };
+
+    /**
+     * Check if photoshop can natively edit and save a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can edit and save the file type.
+     */
+    documents.fileTypeCanEdit = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'edit');
+    };
+
+    /**
+     * Check if the file type supports photoshop layers.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = the file type can save photoshop layers.
+     */
+    documents.fileTypeCanHaveLayers = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'layers');
     };
 
     /**
