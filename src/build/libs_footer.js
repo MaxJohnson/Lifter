@@ -2,7 +2,7 @@
     $.writeln("Libs for shims, shams, polyfills, and party hats loaded...");
 }// end dependency check
 else {
-    console.log("ES5 function [].map() found. Assume we already shim-shammed this party. Not reinitializing dependencies.");
+    console.debug("ES5 function [].map() found. Assume we already shim-shammed this party. Not reinitializing dependencies.");
 }
 
  /* jshint ignore: end */

@@ -16,7 +16,7 @@
 
 ; (function ()
 {
-    log.log("LOADING Lifter.selection ...");
+    log.debug("LOADING Lifter.selection ...");
 
     var selection = {};
 
@@ -461,5 +461,5 @@
     * Contains low-level methods to work with selections without accessing Photoshop DOM.
     */
     Lifter.selection = selection;
-    log.log("Lifter.selection done.");
+    log.debug("Lifter.selection done.");
 }());
