@@ -14,16 +14,26 @@
  * limitations under the License.
  */
 
-; (function ()
+;
+if(typeof Lifter !== "object") {// sanity check for previous definition
+(function ()
 {
 $.strict = true;
+var _DEVBUILD = false;
+$.writeln("Starting Lifter...");
+
+//=========================//
+//    WELCOME TO LIFTER    //
+//=========================//
 
 // Public interface
+
 /**
  * A collection of utilities that make extensive use of Action Manager code
  * to provide fast access to Photoshop functionality without accessing the DOM.
  */
 var Lifter = this.Lifter = function Lifter() { };
+
 /**
  * Copyright 2014 Francesco Camarlinghi
  *
@@ -40,8 +50,44 @@ var Lifter = this.Lifter = function Lifter() { };
  * limitations under the License.
  */
 
+ /* jshint -W014, -W061, -W069 */
+
+/** Cached reference to DialogModes.NO. */
+var _dialogModesNo = DialogModes.NO,
+
+    /** Shortcut to 'c2id' function. */
+    c2id = charIDToTypeID,
+
+    /** Shortcut to 's2id' function. */
+    s2id = stringIDToTypeID;
+
+/** Cache for stacked ruler unit changes */
+var _rulerUnitCache = [];
+
+/** Add support for custom events */
+try {
+    var _xLib = new ExternalObject("lib:\PlugPlugExternalObject");
+} catch (err) {
+    throw new Error(['Could not create ExternalObject for event handling: \n"', err].join(''));
+}
+
 // Global public types
-/** 
+
+/** init logging */
+if( _DEVBUILD ) {
+    Lifter.log = new ExtendScript_Log($.global, 0, "Lifter", true, false);
+} else {
+    Lifter.log = new ExtendScript_Log($.global, 4, "Lifter", false);
+}
+
+if(typeof log !== 'object'){log = Lifter.log;}
+
+//** init dialog helper */
+Lifter.dialogs = new ExtendScript_Dialogs($.global, true);
+
+log.log("LOADING Lifter core ...");
+
+/**
  * Contains utility methods to deal with Enumerators.
  */
 var Enumeration = this.Enumeration = function Enumeration() { };
@@ -115,7 +161,7 @@ Enumeration.toArray = function (enumeration)
     return result;
 };
 
-/** 
+/**
  * Represents an enumeration value by trying to mimic the built-in Enumerator class.
  */
 var Enumerator = this.Enumerator = function Enumerator(name, value)
@@ -157,7 +203,7 @@ Enumerator.prototype = {
     },
 };
 
-/** 
+/**
  * Represents a UnitDouble action descriptor property.
  * Useful to be able to store the UnitDouble type while still being
  * able to easily perform operations using its value.
@@ -201,7 +247,7 @@ UnitDouble.prototype = {
     },
 };
 
-/** 
+/**
  * Represents bounds information for a layer.
  */
 var LayerBounds = this.LayerBounds = function LayerBounds(top, left, bottom, right)
@@ -247,47 +293,56 @@ LayerType.CONTENT = new Enumerator('LayerType.CONTENT', 2);
  * Enumerates layer colors.
  */
 var LayerColor = this.LayerColor = function LayerColor() { };
-LayerColor.NONE = new Enumerator('LayerColor.NONE', charIDToTypeID('None'));
-LayerColor.RED = new Enumerator('LayerColor.RED', charIDToTypeID('Rd  '));
-LayerColor.ORANGE = new Enumerator('LayerColor.ORANGE', charIDToTypeID('Orng'));
-LayerColor.YELLOW = new Enumerator('LayerColor.YELLOW', charIDToTypeID('Ylw '));
-LayerColor.GREEN = new Enumerator('LayerColor.GREEN', charIDToTypeID('Grn '));
-LayerColor.BLUE = new Enumerator('LayerColor.BLUE', charIDToTypeID('Bl  '));
-LayerColor.VIOLET = new Enumerator('LayerColor.VIOLET', charIDToTypeID('Vlt '));
-LayerColor.GRAY = new Enumerator('LayerColor.GRAY', charIDToTypeID('Gry '));
+LayerColor.NONE = new Enumerator('LayerColor.NONE', c2id('None'));
+LayerColor.RED = new Enumerator('LayerColor.RED', c2id('Rd  '));
+LayerColor.ORANGE = new Enumerator('LayerColor.ORANGE', c2id('Orng'));
+LayerColor.YELLOW = new Enumerator('LayerColor.YELLOW', c2id('Ylw '));
+LayerColor.GREEN = new Enumerator('LayerColor.GREEN', c2id('Grn '));
+LayerColor.BLUE = new Enumerator('LayerColor.BLUE', c2id('Bl  '));
+LayerColor.VIOLET = new Enumerator('LayerColor.VIOLET', c2id('Vlt '));
+LayerColor.GRAY = new Enumerator('LayerColor.GRAY', c2id('Gry '));
+
+
+/**
+ * Enumerates layer mask types. Useful for making selections. This is not native.
+ */
+var LifterMaskType = this.LifterMaskType = function LifterMaskType() { };
+LifterMaskType.TRANSPARENCY = new Enumerator('LifterMaskType.TRANSPARENCY', 0);
+LifterMaskType.LAYERMASK = new Enumerator('LifterMaskType.USERMASK', 1);
+LifterMaskType.VECTORMASK = new Enumerator('LifterMaskType.VECTORMASK', 2);
 
 /**
  * Enumerates blend modes. Acts as an useful proxy to Photoshop BlendMode enumeration.
  */
 var LifterBlendMode = this.LifterBlendMode = function LifterBlendMode() { };
-LifterBlendMode.PASSTHROUGH = new Enumerator('LifterBlendMode.PASSTHROUGH', stringIDToTypeID('passThrough'));
-LifterBlendMode.NORMAL = new Enumerator('LifterBlendMode.NORMAL', charIDToTypeID('Nrml'));
-LifterBlendMode.DISSOLVE = new Enumerator('LifterBlendMode.DISSOLVE', charIDToTypeID('Dslv'));
-LifterBlendMode.DARKEN = new Enumerator('LifterBlendMode.DARKEN', charIDToTypeID('Drkn'));
-LifterBlendMode.MULTIPLY = new Enumerator('LifterBlendMode.MULTIPLY', charIDToTypeID('Mltp'));
-LifterBlendMode.COLORBURN = new Enumerator('LifterBlendMode.COLORBURN', charIDToTypeID('CBrn'));
-LifterBlendMode.LINEARBURN = new Enumerator('LifterBlendMode.LINEARBURN', stringIDToTypeID('linearBurn'));
-LifterBlendMode.DARKERCOLOR = new Enumerator('LifterBlendMode.DARKERCOLOR', stringIDToTypeID('darkerColor'));
-LifterBlendMode.LIGHTEN = new Enumerator('LifterBlendMode.LIGHTEN', charIDToTypeID('Lghn'));
-LifterBlendMode.SCREEN = new Enumerator('LifterBlendMode.SCREEN', charIDToTypeID('Scrn'));
-LifterBlendMode.COLORDODGE = new Enumerator('LifterBlendMode.COLORDODGE', charIDToTypeID('CDdg'));
-LifterBlendMode.LINEARDODGE = new Enumerator('LifterBlendMode.LINEARDODGE', stringIDToTypeID('linearDodge'));
-LifterBlendMode.LIGHTERCOLOR = new Enumerator('LifterBlendMode.LIGHTERCOLOR', stringIDToTypeID('lighterColor'));
-LifterBlendMode.OVERLAY = new Enumerator('LifterBlendMode.OVERLAY', charIDToTypeID('Ovrl'));
-LifterBlendMode.SOFTLIGHT = new Enumerator('LifterBlendMode.SOFTLIGHT', charIDToTypeID('SftL'));
-LifterBlendMode.HARDLIGHT = new Enumerator('LifterBlendMode.HARDLIGHT', charIDToTypeID('HrdL'));
-LifterBlendMode.VIVIDLIGHT = new Enumerator('LifterBlendMode.VIVIDLIGHT', stringIDToTypeID('vividLight'));
-LifterBlendMode.LINEARLIGHT = new Enumerator('LifterBlendMode.LINEARLIGHT', stringIDToTypeID('linearLight'));
-LifterBlendMode.PINLIGHT = new Enumerator('LifterBlendMode.PINLIGHT', stringIDToTypeID('pinLight'));
-LifterBlendMode.HARDMIX = new Enumerator('LifterBlendMode.HARDMIX', stringIDToTypeID('hardMix'));
-LifterBlendMode.DIFFERENCE = new Enumerator('LifterBlendMode.DIFFERENCE', charIDToTypeID('Dfrn'));
-LifterBlendMode.EXCLUSION = new Enumerator('LifterBlendMode.EXCLUSION', charIDToTypeID('Xclu'));
-LifterBlendMode.SUBTRACT = new Enumerator('LifterBlendMode.SUBTRACT', stringIDToTypeID('blendSubtraction'));
-LifterBlendMode.DIVIDE = new Enumerator('LifterBlendMode.DIVIDE', stringIDToTypeID('blendDivide'));
-LifterBlendMode.HUE = new Enumerator('LifterBlendMode.HUE', charIDToTypeID('H   '));
-LifterBlendMode.SATURATION = new Enumerator('LifterBlendMode.SATURATION', charIDToTypeID('Strt'));
-LifterBlendMode.COLOR = new Enumerator('LifterBlendMode.COLOR', charIDToTypeID('Clr '));
-LifterBlendMode.LUMINOSITY = new Enumerator('LifterBlendMode.LUMINOSITY', charIDToTypeID('Lmns'));
+LifterBlendMode.PASSTHROUGH = new Enumerator('LifterBlendMode.PASSTHROUGH', s2id('passThrough'));
+LifterBlendMode.NORMAL = new Enumerator('LifterBlendMode.NORMAL', c2id('Nrml'));
+LifterBlendMode.DISSOLVE = new Enumerator('LifterBlendMode.DISSOLVE', c2id('Dslv'));
+LifterBlendMode.DARKEN = new Enumerator('LifterBlendMode.DARKEN', c2id('Drkn'));
+LifterBlendMode.MULTIPLY = new Enumerator('LifterBlendMode.MULTIPLY', c2id('Mltp'));
+LifterBlendMode.COLORBURN = new Enumerator('LifterBlendMode.COLORBURN', c2id('CBrn'));
+LifterBlendMode.LINEARBURN = new Enumerator('LifterBlendMode.LINEARBURN', s2id('linearBurn'));
+LifterBlendMode.DARKERCOLOR = new Enumerator('LifterBlendMode.DARKERCOLOR', s2id('darkerColor'));
+LifterBlendMode.LIGHTEN = new Enumerator('LifterBlendMode.LIGHTEN', c2id('Lghn'));
+LifterBlendMode.SCREEN = new Enumerator('LifterBlendMode.SCREEN', c2id('Scrn'));
+LifterBlendMode.COLORDODGE = new Enumerator('LifterBlendMode.COLORDODGE', c2id('CDdg'));
+LifterBlendMode.LINEARDODGE = new Enumerator('LifterBlendMode.LINEARDODGE', s2id('linearDodge'));
+LifterBlendMode.LIGHTERCOLOR = new Enumerator('LifterBlendMode.LIGHTERCOLOR', s2id('lighterColor'));
+LifterBlendMode.OVERLAY = new Enumerator('LifterBlendMode.OVERLAY', c2id('Ovrl'));
+LifterBlendMode.SOFTLIGHT = new Enumerator('LifterBlendMode.SOFTLIGHT', c2id('SftL'));
+LifterBlendMode.HARDLIGHT = new Enumerator('LifterBlendMode.HARDLIGHT', c2id('HrdL'));
+LifterBlendMode.VIVIDLIGHT = new Enumerator('LifterBlendMode.VIVIDLIGHT', s2id('vividLight'));
+LifterBlendMode.LINEARLIGHT = new Enumerator('LifterBlendMode.LINEARLIGHT', s2id('linearLight'));
+LifterBlendMode.PINLIGHT = new Enumerator('LifterBlendMode.PINLIGHT', s2id('pinLight'));
+LifterBlendMode.HARDMIX = new Enumerator('LifterBlendMode.HARDMIX', s2id('hardMix'));
+LifterBlendMode.DIFFERENCE = new Enumerator('LifterBlendMode.DIFFERENCE', c2id('Dfrn'));
+LifterBlendMode.EXCLUSION = new Enumerator('LifterBlendMode.EXCLUSION', c2id('Xclu'));
+LifterBlendMode.SUBTRACT = new Enumerator('LifterBlendMode.SUBTRACT', s2id('blendSubtraction'));
+LifterBlendMode.DIVIDE = new Enumerator('LifterBlendMode.DIVIDE', s2id('blendDivide'));
+LifterBlendMode.HUE = new Enumerator('LifterBlendMode.HUE', c2id('H   '));
+LifterBlendMode.SATURATION = new Enumerator('LifterBlendMode.SATURATION', c2id('Strt'));
+LifterBlendMode.COLOR = new Enumerator('LifterBlendMode.COLOR', c2id('Clr '));
+LifterBlendMode.LUMINOSITY = new Enumerator('LifterBlendMode.LUMINOSITY', c2id('Lmns'));
 
 /** Converts the passed BlendMode to a LifterBlendMode. */
 LifterBlendMode.fromBlendMode = function (blendMode) { return LifterBlendMode[String(blendMode).replace(/BlendMode\./, '')]; };
@@ -308,17 +363,95 @@ function _ensureLifterBlendMode(blendMode)
  * Enumerates apply image source channels.
  */
 var ApplyImageChannel = this.ApplyImageChannel = function ApplyImageChannel() { };
-ApplyImageChannel.RGB = new Enumerator('ApplyImageChannel.RGB', charIDToTypeID('RGB '));
-ApplyImageChannel.Red = new Enumerator('ApplyImageChannel.Red', charIDToTypeID('Rd  '));
-ApplyImageChannel.Green = new Enumerator('ApplyImageChannel.Green', charIDToTypeID('Grn '));
-ApplyImageChannel.Blue = new Enumerator('ApplyImageChannel.Blue', charIDToTypeID('Bl  '));
+ApplyImageChannel.RGB = new Enumerator('ApplyImageChannel.RGB', c2id('RGB '));
+ApplyImageChannel.Red = new Enumerator('ApplyImageChannel.Red', c2id('Rd  '));
+ApplyImageChannel.Green = new Enumerator('ApplyImageChannel.Green', c2id('Grn '));
+ApplyImageChannel.Blue = new Enumerator('ApplyImageChannel.Blue', c2id('Bl  '));
 
 
 // Global utilities
-/** Cached reference to DialogModes.NO. */
-var _dialogModesNo = DialogModes.NO;
 
-/** 
+/**
+  * Test if defined and not null
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  if defined and not null
+  */
+var isDef = Lifter.isDef = function isDef(v) {
+    return (typeof v !== 'undefined' && v !== null);
+};
+
+
+/**
+  * Test if variable has .length or keys().length > 0
+  * everything else returns true (empty).
+  * Useful because because jQuery objects can have
+  *  a .length of 0 but still have keys().length
+  *
+  * @param {*} v  any variable
+  * @returns [Boolean]  false if varibale has length > 0
+  */
+var isEmpty = Lifter.isEmpty = function isEmpty(v) {
+    // do this because jQuery objects can have length 0 on objects with keys
+    var empty = true;
+    if (isDef(v)) {
+        if (isDef(v.length)) {
+            empty = (v.length === 0);
+        } else if (Object.keys(v).length > 0) {
+            empty = false;
+        }
+    }
+    return empty;
+};
+
+/**
+* Store current Ruler Unit settings and set to new unit setting
+* @param {Int} units a Units.<something> value, eg. Units.PIXELS
+*/
+var setRuler = Lifter.setRuler = function setRuler (units)
+{
+    _rulerUnitCache.push(app.preferences.rulerUnits);
+    app.preferences.rulerUnits = units;
+};
+
+/**
+* Reset Ruler Units to stored settings
+*/
+var resetRuler = Lifter.resetRuler = function resetRuler (units)
+{
+    app.preferences.rulerUnits = _rulerUnitCache.pop();
+};
+
+/**
+ * Get a rect (x,y,width,height) from bounds or bounds-like number array
+ *
+ * @param {*} bounds  a bounds object or number array
+ * @returns [Object]  object with x, y, width, height
+ */
+var getRect = Lifter.getRect = function getRect(bounds, unit) {
+    var rect = {};
+    unit = (typeof unit === 'string')? unit : 'px';
+
+    function _getVal(o) {
+        return (o instanceof UnitValue) ? o.as(unit) : o;
+    }
+
+    if(bounds instanceof LayerBounds) {
+        rect.x = bounds.left.as(unit);
+        rect.y = bounds.top.as(unit);
+        rect.width = bounds.right.as(unit) - rect.x;
+        rect.height = bounds.bottom.as(unit) - rect.y;
+    } else {
+        rect.x = _getVal(bounds[0]);
+        rect.y = _getVal(bounds[1]);
+        rect.width = _getVal(bounds[2]) - rect.x;
+        rect.height = _getVal(bounds[3]) - rect.y;
+    }
+
+    return rect;
+};
+
+/**
  * Gets the descriptor property identified by the specified key (encoded as typeId).
  * Type must be a valid DescValueType enumerator. If type is not provided it is
  * automatically guessed.
@@ -344,9 +477,38 @@ function _getDescriptorProperty(desc, key, type)
         case DescValueType.UNITDOUBLE: return new UnitDouble(desc.getUnitDoubleType(key), desc.getUnitDoubleValue(key));
         default: throw new Error(['Unsupported descriptor value type: "', type, '".'].join(''));
     }
-};
+}
 
-/** 
+Lifter.getDescPropById = _getDescPropById;
+function _getDescPropById(desc, tid)
+{
+    try{
+        return _getDescriptorProperty(desc, tid);
+    } catch (e) {
+        log.warn('Invalid descriptor property: "'+tid+'".'+e);
+        return;
+    }
+}
+
+Lifter.getDescPropByName = _getDescPropByName;
+function _getDescPropByName(desc, name)
+{
+    var tid, subProps;
+    var prop = name;
+
+    var dotTest = name.indexOf(".");
+    if(dotTest !== -1 ) {
+        prop = name.substring(0, dotTest);
+        subProps = name.substring(dotTest+1, name.length);
+        desc = _getDescPropById(desc, s2id(prop)).value;
+        return _getDescPropByName(desc, subProps);
+    }
+    else {
+        return _getDescPropById(desc, s2id(prop));
+    }
+}
+
+/**
  * Gets a wrapped ActionDescriptor, whose properties can be accessed and set using
  * Lifter syntactic sugar.
  */
@@ -354,8 +516,17 @@ function _getWrappedActionDescriptor(desc, props, id)
 {
     var fn = function (desc, props, id, name, value)
     {
-        if (!props.hasOwnProperty(name))
-            throw new Error(['Invalid property: "', name, '".'].join(''));
+        if (typeof value === 'undefined')
+        {
+            try{
+                return _getDescriptorProperty(desc, s2id(name));
+            } catch (e) {
+                log.warn(['Invalid layer property: "', name, '".'].join(''));
+                return;
+            }
+        } else {
+            throw new Error(['Property "', name, '" is read-only.'].join(''));
+        }
 
         var prop = props[name];
 
@@ -388,15 +559,15 @@ function _getWrappedActionDescriptor(desc, props, id)
         innerDescriptor: desc,
         prop: fn.bind(null, desc, props, id),
     };
-};
+}
 
-/** 
+/**
  * Converts a 0-255 integer value to its 100-based percentage equivalent.
  * @private
  */
-function _byteToPercent(value) { return (value / 255.0) * 100.0; };
+function _byteToPercent(value) { return (value / 255.0) * 100.0; }
 
-/** 
+/**
  * Iterates over a collection searching for the specified patterns.
  * @private
  */
@@ -406,13 +577,20 @@ function _find(collection, findType, patterns, context)
     {
         for (var j = 0; j < keysLength; j++)
         {
-            if (patterns[keys[j]] !== collection.prop(id, keys[j]))
-                return false;
+            var matchPattern = patterns[keys[j]];
+            var matchTarget = collection.prop(id, keys[j]);
+            if(matchPattern instanceof RegExp) {
+                if (matchPattern.test(matchTarget) === false)
+                    return false;
+            } else {
+                if (matchPattern !== matchTarget)
+                    return false;
+            }
         }
 
         found.push(id);
         return true;
-    };
+    }
 
     if (typeof patterns !== 'function')
     {
@@ -459,469 +637,99 @@ function _find(collection, findType, patterns, context)
     {
         collection.forEach(patterns, context);
     }
-};
+}
 
-/** 
+/**
+ * Fakes function overloading for an expected argument set of (Number,Bool)
+ * by mutating the argument array directly.
+ * Allows for things like fn(), fn(5), fn(true), fn(2, false)
+ *
+ * @private
+ * @method      _overloadFunction_Number_Bool
+ * @param       {Array}                      arguments     passed arguments from a function
+ * @param       {Number}                      numberDefault Default if not passed as arg
+ * @param       {Boolean}                      boolDefault   Default if not passed as arg
+ * @void
+ */
+function _overloadFunction_Number_Bool (arguments, numberDefault, boolDefault) {
+    // overload
+    if (typeof arguments[0] === 'boolean')
+    {
+        arguments[1] = arguments[0];
+        arguments[0] = undefined;//no id
+    }
+
+    // default if NaN
+    arguments[0] = isNaN(arguments[0])? numberDefault:arguments[0];
+
+    // default and set to actual boolean
+    if( boolDefault === true ) {
+        arguments[1] = (arguments[1] !== false);// always true unless false
+    } else {
+        arguments[1] = (arguments[1] === true);// always false unless true
+    }
+}
+
+/**
+ * Fakes function overloading for an expected argument set of (Number,Obj)
+ * by mutating the argument array directly.
+ * Allows for things like fn(), fn(5), fn(SelectionType.REPLACE), fn(2, myReference)
+ *
+ * @private
+ * @method      _overloadFunction_Number_Obj
+ * @param       {Array}                      arguments     passed arguments from a function
+ * @param       {Number}                      numberDefault Default if not passed as arg
+ * @param       {Object}                      objDefault   Default if not passed as arg
+ * @void
+ */
+function _overloadFunction_Number_Obj(arguments, numberDefault, objDefault) {
+    // overload
+    if (typeof arguments[0] === 'object') {
+        arguments[1] = arguments[0];
+        arguments[0] = undefined; //no id
+    }
+
+    // default if NaN
+    arguments[0] = isNaN(arguments[0]) ? numberDefault : arguments[0];
+
+    // default and set to actual boolean
+    if (typeof arguments[1] !== 'object' && typeof objDefault === 'object') {
+        arguments[1] = objDefault;
+    }
+}
+
+
+/**
  * Gets a valid File object from the passed parameter.
  * @private
  */
-function _ensureFile(file)
+function _ensureFile(myFile)
 {
-    if (!(file instanceof File))
-        file = new File(file);
+    if (!(myFile instanceof File))
+        myFile = new File(myFile);
 
-    if (!file.exists)
-        throw new Error(['The specified file does not exists: "', file, '".'].join(''));
+    if (!myFile.exists)
+        throw new Error(['The specified file does not exists: "', myFile, '".'].join(''));
 
-    return file;
-};
-/**
- * Copyright 2014 Francesco Camarlinghi
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * 	http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-// ECMA Language extensions
-/**
- * Executes the provided callback function once for each element present in
- * the array. callback is invoked only for indexes of the array which have
- * assigned values; it is not invoked for indexes which have been deleted or
- * which have never been assigned values.
- * @param   {Function} callback     Callback function. It is bound to context and invoked
- *                                  with three arguments (element, index, array).
- * @param   {Any} [context]         Callback function context.
- */
-Array.prototype.forEach = Array.prototype.forEach || function (callback /*, context */)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach
-    if (this === void 0 || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var t = Object(this),
-        n = t.length >>> 0;
-
-    if (typeof callback !== "function")
-        throw new TypeError('callback must be a function.');
-
-    var context = arguments.length >= 2 ? arguments[1] : void 0;
-
-    for (var i = 0; i < n; i++)
-    {
-        if (i in t)
-            callback.call(context, t[i], i, t);
-    }
-};
+    return myFile;
+}
 
 /**
- * Executes the provided callback function once for each element present in
- * the array until it finds one where callback returns a falsy value. callback is 
- * invoked only for indexes of the array which have assigned values; it is not
- * invoked for indexes which have been deleted or which have never been assigned values.
- * @param   {Function} callback     Callback function. It is bound to context and invoked
- *                                  with three arguments (element, index, array).
- * @param   {Any} [context]         Callback function context.
- * @return  {Boolean} If callback returns a falsy value, immediately returns false.
- *          Otherwise, if callback returned a true value for all elements,
- *          returns true.
+ * Executes a jsx file or errors
+ * @private
+ * @param {File} File object.
  */
-Array.prototype.every = Array.prototype.every || function (callback /*, context */)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/every
-    if (this === void 0 || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var t = Object(this),
-        n = t.length >>> 0;
-
-    if (typeof callback !== 'function')
-        throw new TypeError('callback must be a function.');
-
-    var context = arguments.length >= 2 ? arguments[1] : void 0;
-
-    for (var i = 0; i < n; i++)
-    {
-        if (i in t && !callback.call(context, t[i], i, t))
-            return false;
+function _evalFile (myFile){
+    //TODO: if(_debug) log(["Eval: ", jsxFile].join(''));
+    try{
+        $.evalFile( myFile );
+    } catch (err) {
+        throw new Error(['Eval error: "', myFile, '".\n',err].join(''));
     }
+}
 
-    return true;
-};
+log.log("Lifter core done.");
 
-/**
- * Executes the provided callback function once for each element present in
- * the array until it finds one where callback returns a true value.
- * callback is invoked only for indexes of the array which have
- * assigned values; it is not invoked for indexes which have been deleted or
- * which have never been assigned values.
- * @param   {Function} callback     Callback function. It is bound to context and invoked
- *                                  with three arguments (element, index, array).
- * @param   {Any} [context]         Callback function context.
- * @return  {Boolean} If callback returns a true value, immediately returns true.
- *          Otherwise, if callback returned a falsy value for all elements,
- *          returns false.
- */
-Array.prototype.some = Array.prototype.some || function (callback /*, context */)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/some
-    if (this === void 0 || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var t = Object(this),
-        n = t.length >>> 0;
-
-    if (typeof callback !== 'function')
-        throw new TypeError('callback must be a function.');
-
-    var context = arguments.length >= 2 ? arguments[1] : void 0;
-
-    for (var i = 0; i < n; i++)
-    {
-        if (i in t && callback.call(context, t[i], i, t))
-            return true;
-    }
-
-    return false;
-};
-
-/**
- * Creates a new array with the results of calling a provided function on
- * every element in this array. callback is invoked only for indexes of the
- * array which have assigned values; it is not invoked for indexes which have
- * been deleted or which have never been assigned values.
- * @param   {Function} callback     Callback function. It is bound to context and invoked
- *                                  with three arguments (element, index, array).
- * @param   {Any} [context]         Callback function context.
- * @return  {Array} New array built by calling the provided function on every element
- *          in this array.
- */
-Array.prototype.map = Array.prototype.map || function (callback /*, context */)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map
-    if (this === void 0 || this === null)
-        throw new TypeError();
-
-    var t = Object(this),
-        n = t.length >>> 0;
-
-    if (typeof callback !== "function")
-        throw new TypeError('callback must be a function.');
-
-    var res = new Array(n),
-        context = arguments.length >= 2 ? arguments[1] : void 0;
-
-    for (var i = 0; i < n; i++)
-    {
-        // NOTE: Absolute correctness would demand Object.defineProperty to
-        // be used, but it's not implemented in ExtendScript
-        if (i in t)
-            res[i] = callback.call(context, t[i], i, t);
-    }
-
-    return res;
-};
-
-/**
- * Gets the first index at which a given element can be found in the array,
- * or -1 if it is not present.
- * @param   {Any} searchElement     Element to locate in the array.
- * @param   {Number} [fromIndex=0]  The index to start the search at, defaults to 0.
- * @return  {Number} Index at which the given element was found in the array; otherwise, -1.
- */
-Array.prototype.indexOf = Array.prototype.indexOf || function (searchElement /*, fromIndex*/)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/indexOf
-    if (this === undefined || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var t = Object(this),
-        length = t.length >>> 0,
-        fromIndex = arguments.length >= 2 ? +arguments[1] : 0;
-
-    if (Math.abs(fromIndex) === Infinity)
-        fromIndex = 0;
-
-    if (fromIndex < 0)
-    {
-        fromIndex += length;
-        if (fromIndex < 0)
-            fromIndex = 0;
-    }
-
-    for (; fromIndex < length; fromIndex++)
-    {
-        if (t[fromIndex] === searchElement)
-            return fromIndex;
-    }
-
-    return -1;
-};
-
-/**
- * Gets the first index at which a given element can be found in the array,
- * or -1 if it is not present. The array is searched backwards, starting at fromIndex.
- * @param   {Any} searchElement     Element to locate in the array.
- * @param   {Number} [fromIndex]    The index to start the search at, defaults to the array's length.
- *                                  If the index is greater than or equal to the length of the array, the whole
- *                                  array will be searched. If negative, it is taken as the offset from the end
- *                                  of the array. Note that even when the index is negative, the array is still
- *                                  searched from back to front. If the calculated index is less than 0, -1 is
- *                                  returned, i.e. the array will not be searched.
- * @return  {Number} Index at which the given element was found in the array; otherwise, -1.
- */
-Array.prototype.lastIndexOf = Array.prototype.lastIndexOf || function (searchElement /*, fromIndex*/)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/lastIndexOf
-    if (this === undefined || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var n, k,
-        t = Object(this),
-        len = t.length >>> 0;
-
-    if (len === 0)
-        return -1;
-
-    n = len;
-    if (arguments.length > 1)
-    {
-        n = Number(arguments[1]);
-
-        if (n != n)
-        {
-            n = 0;
-        }
-        else if (n != 0 && n != (1 / 0) && n != -(1 / 0))
-        {
-            n = (n > 0 || -1) * Math.floor(Math.abs(n));
-        }
-    }
-
-    for (k = n >= 0
-          ? Math.min(n, len - 1)
-          : len - Math.abs(n) ; k >= 0; k--)
-    {
-        if (k in t && t[k] === searchElement)
-            return k;
-    }
-
-    return -1;
-};
-
-/**
- * Creates a new array with all elements that pass the test implemented by
- * the provided function. callback is invoked only for indexes of the
- * array which have assigned values; it is not invoked for indexes which have
- * been deleted or which have never been assigned values.
- * @param   {Function} callback     Callback function. It is bound to context and invoked
- *                                  with three arguments (element, index, array).
- * @param   {Any} [context]         Callback function context.
- * @return  {Array} New array built by calling the provided function on every element
- *          in this array.
- */
-Array.prototype.filter = Array.prototype.filter || function (callback /*, context */)
-{
-    if (this === void 0 || this === null)
-        throw new TypeError('"this" is null or not defined.');
-
-    var t = Object(this),
-        n = t.length >>> 0;
-
-    if (typeof callback != "function")
-        throw new TypeError('callback must be a function.');
-
-    var res = [],
-        context = arguments.length >= 2 ? arguments[1] : void 0;
-
-    for (var i = 0; i < n; i++)
-    {
-        if (i in t)
-        {
-            var val = t[i];
-            // NOTE: Technically this should Object.defineProperty at the next index as
-            // push can be affected by properties on Object.prototype and Array.prototype,
-            // but it's not implemented in ExtendScript.
-            if (callback.call(context, val, i, t))
-                res.push(val);
-        }
-    }
-
-    return res;
-};
-
-/**
- * Applies a function against an accumulator and each value of the array (from left-to-right)
- * has to reduce it to a single value.
- * @param   {Function} callback     Function to execute on each value in the array, taking four arguments
- *                                  (previousValue, currentValue, index, array).
- *                                  previousValue: The value previously returned in the last invocation of the
- *                                  callback, or initialValue, if supplied.
- *                                  currentValue: The current element being processed in the array.
- *                                  index: The index of the current element being processed in the array.
- *                                  array: The array reduce was called upon. 
- * @param   {Any} [initialValue]    Object to use as the first argument to the first call of the callback.
- * @return  {Any} Reduced value.
- */
-Array.prototype.reduce = Array.prototype.reduce || function (callback /*, initialValue*/)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/Reduce
-
-    if (this === null || typeof this === 'undefined')
-        throw new TypeError('Array.prototype.reduce called on null or undefined.');
-
-    if (typeof callback !== 'function')
-        throw new TypeError(callback + ' is not a function');
-
-    var t = Object(this), len = t.length >>> 0, k = 0, value;
-
-    if (arguments.length >= 2)
-    {
-        value = arguments[1];
-    }
-    else
-    {
-        while (k < len && !k in t)
-            k++;
-
-        if (k >= len)
-            throw new TypeError('Reduce of empty array with no initial value.');
-
-        value = t[k++];
-    }
-
-    for (; k < len ; k++)
-    {
-        if (k in t)
-            value = callback(value, t[k], k, t);
-    }
-
-    return value;
-};
-
-/**
- * Applies a function against an accumulator and each value of the array (from right-to-left)
- * has to reduce it to a single value.
- * @param   {Function} callback     Function to execute on each value in the array, taking four arguments
- *                                  (previousValue, currentValue, index, array).
- *                                  previousValue: The value previously returned in the last invocation of the
- *                                  callback, or initialValue, if supplied.
- *                                  currentValue: The current element being processed in the array.
- *                                  index: The index of the current element being processed in the array.
- *                                  array: The array reduce was called upon. 
- * @param   {Any} [initialValue]    Object to use as the first argument to the first call of the callback.
- * @return  {Any} Reduced value.
- */
-Array.prototype.reduceRight = Array.prototype.reduceRight || function (callback /*, initialValue*/)
-{
-    // Polyfill
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/ReduceRight
-
-    if (this === null || typeof this === 'undefined')
-        throw new TypeError('Array.prototype.reduce called on null or undefined.');
-
-    if (typeof callback !== 'function')
-        throw new TypeError(callback + ' is not a function.');
-
-    var t = Object(this), len = t.length >>> 0, k = len - 1, value;
-
-    if (arguments.length >= 2)
-    {
-        value = arguments[1];
-    }
-    else
-    {
-        while (k >= 0 && !k in t)
-            k--;
-
-        if (k < 0)
-            throw new TypeError('Reduce of empty array with no initial value.');
-
-        value = t[k--];
-    }
-
-    for (; k >= 0 ; k--)
-    {
-        if (k in t)
-            value = callback(value, t[k], k, t);
-    }
-
-    return value;
-};
-
-/**
- * Gets the keys contained in the object.
- * @return  {Array} An array containing all the keys contained in the object.
- */
-Object.keys = Object.keys || (function ()
-{
-    var hasOwnProperty = Object.prototype.hasOwnProperty;
-
-    return function (obj)
-    {
-        if (typeof obj !== 'object' && (typeof obj !== 'function' || obj === void 0 || obj === null))
-            throw new TypeError('Object.keys called on non-object');
-
-        var result = [], prop;
-
-        for (prop in obj)
-        {
-            if (hasOwnProperty.call(obj, prop))
-                result.push(prop);
-        }
-
-        return result;
-    };
-}());
-
-/**
- * creates a new function that, when called, has its this keyword set to the provided value, with a given
- * sequence of arguments preceding any provided when the new function is called.
- * 
- * @param {Any} context     The value to be passed as the this parameter to the target function when
- *                          the bound function is called.
- * @param {Object} *args    Arguments to prepend to arguments provided to the bound function when invoking
- *                          the target function.
- * 
- * @return  {Function} A copy of the invoking function, with its context and first n arguments pre-assigned.
- */
-Function.prototype.bind = Function.prototype.bind || function ()
-{
-    // Based on:
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
-    if (typeof this !== "function")
-        throw new TypeError('"this" is not callable.');
-
-    var args = Array.prototype.slice.call(arguments, 1),
-        toBind = this,
-        noOp = function () { },
-        bound = function ()
-        {
-            return toBind.apply(this instanceof noOp && oThis
-                                   ? this
-                                   : oThis,
-                                 args.concat(Array.prototype.slice.call(arguments)));
-        };
-
-    noOp.prototype = this.prototype;
-    bound.prototype = new noOp();
-    return bound;
-};
 /**
  * Copyright 2014 Francesco Camarlinghi
  *
@@ -1053,6 +861,219 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 {
     return this;
 };
+
+/**
+ * Pads a number with zeros
+ * @param  {Interger}  padCount      Interger that is the desired number of digits
+ * @return {String} String with added zeros
+ */
+Number.prototype.pad = function (padCount)
+{
+    var absNum = Math.abs(this);
+    var zeros = Math.max(0, padCount - Math.floor(absNum).toString().length);
+    var zeroString = Math.pow(10, zeros).toString().substr(1);
+    if (this < 0) {
+        zeroString = '-' + zeroString;
+    }
+
+    return zeroString + absNum;
+};
+
+/**
+ * Shorten a string with ellipsis ...
+ * @param  {Interger}  maxLength      Interger that is the desired length including the ellipsis replacement
+ * @param  {String}    orientation    Part to chop out: "Start","Center", or "End"
+ * @param  {String}    ellipsisString String to put in place of chopped characters
+ * @return {String}                   Shortened string
+ */
+String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisString) {
+    ellipsisString = ellipsisString || "...";
+    if (this.length > maxLength) {
+        if (maxLength > ellipsisString.length)
+        {
+            switch (orientation) {
+                case "start":
+                    return ellipsisString + this.slice(-(maxLength - ellipsisString.length));
+                case "center":
+                    if (maxLength != ellipsisString.length + 1) {
+                        return this.slice(0, Math.floor(maxLength / 2) - Math.floor(ellipsisString.length / 2)) + ellipsisString + this.slice(-(Math.ceil(maxLength / 2) - Math.ceil(ellipsisString.length / 2)), this.length);
+                    }
+                case "end":
+                default:
+                    return this.slice(0, maxLength - ellipsisString.length) + ellipsisString;
+            }
+        } else {
+            return ellipsisString;
+        }
+    }
+    return this;
+};
+
+/**
+ * Copyright 2019 Max Johnson
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 	http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+; (function ()
+{
+    var colors = {};
+
+    /*** Converts RGB array to SolidColor color object
+    * @param { Array } color RGB array eg [255,255,255]
+    * @returns { SolidColor }
+    */
+    colors.arrayToSolidColor = function colorArrayToSolidColor(aRGB) {
+        var color = new SolidColor();
+        color.rgb.red = aRGB[0];
+        color.rgb.green = aRGB[1];
+        color.rgb.blue = aRGB[2];
+        return color;
+    };
+
+
+    /**
+     * Converts SolidColor color object to RGB array [255,255,255]
+     * @param {SolidColor}  color   SolidColor object
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.solidColorToArray = function colorSolidColorToArray(color) {
+        if (color.hasOwnProperty("rgb")) {
+            return [color.rgb.red, color.rgb.green, color.rgb.blue];
+        }
+        return [];
+    };
+
+
+    /**
+     * Converts rgb color text list or hex value to array eg. "#777777",
+     * "(255,255,255)", "[255, 255, 255]"
+     * @param {String}  color   0-255 rgb color text list  eg. "(255,255,255)", "[255, 255, 255]"
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.stringToArray = function colorStringToArray(color) {
+        // no commas means hex... cause assumptions.
+        if (color.indexOf(",") === -1) {
+            // strip # symbol if present...
+            if ((color.indexOf("#") === 0)) {
+                color = color.substring(1, color.length);
+            }
+            // handle shorthand #334 style. So robust!
+            if (color.length === 3) {
+                color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2];
+            }
+            // parse char pairs in base 16
+            return [
+                parseInt(color.substring(0, 2), 16),
+                parseInt(color.substring(2, 4), 16),
+                parseInt(color.substring(4, 6), 16)
+            ];
+        } else {
+            // strip whitespace, brackets, and parens, then convert to array
+            return color.replace(/[\s\(\)\[\]]/g, "").split(",");
+        }
+    };
+
+    /**
+     * Attempts to convert object to Photoshop SolidColor object
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {Array}
+     */
+    colors.toSolidColor = function colorToSolidColor(color) {
+        if(color instanceof SolidColor === false) {
+            if(typeof color === 'string') {
+                color = colors.toArray(color);
+            }
+            color = colors.arrayToSolidColor(color);
+        }
+        return color;
+    };
+
+
+    /**
+     * Attempts to convert var to Action Descriptor Color object
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {ActionDescriptor}
+     */
+    colors.toActionDescriptor = function colorToActionDescriptor(color) {
+        var aColor = colors.toArray(color);
+        var descColor = new ActionDescriptor();
+        var descRGBC = new ActionDescriptor();
+        descRGBC.putDouble( c2id( 'Rd  ' ), aColor[0] );
+        descRGBC.putDouble( c2id( 'Grn ' ), aColor[1] );
+        descRGBC.putDouble( c2id( 'Bl  ' ), aColor[2] );
+        descColor.putObject( s2id( "color" ), s2id( "RGBColor" ), descRGBC );
+
+        return descColor;
+    };
+
+
+    /**
+     * Attempts to convert object to 0-255 based RGB array
+     * defaults to foreground color
+     * @param {*}  color   SolidColor object, string, or array
+     * @returns {Array} RGB array eg [255,255,255]
+     */
+    colors.toArray = function colorToArray(color) {
+        //$._PSU.log(color.hasOwnProperty("constructor"),true)
+        if (typeof color !== "undefined") {
+            switch (color.constructor.name) {
+                case "SolidColor":
+                    color = colors.solidColorToArray(color);
+                    break;
+                case "String":
+                    color = colors.stringToArray(color);
+                    break;
+                case "Array":
+                    color = color;
+                    break;
+                default:
+                    color = colors.solidColorToArray(app.foregroundColor);
+                    break;
+            }
+            return color;
+        } else {
+            return colors.solidColorToArray(app.foregroundColor);
+        }
+    };
+
+
+    /**
+     * Invert a color
+     * @method colorInvert
+     * @param  {*}    color SolidColor object, string, or RGB array [255,255,255]
+     * @return {*}          returns SolidColor or RGB array eg [255,255,255]
+     */
+    colors.invert = function colorInvert(color) {
+        var type = color.constructor.name;
+        color = colors.toArray(color);
+        color = [255 - color[0], 255 - color[1], 255 - color[2]];
+        if(type === "SolidColor") {
+            color = colors.arrayToSolidColor(color);
+        }
+        return color;
+    };
+
+
+    // Public API
+    /**
+    * Contains methods to covert and manipulate colors.
+    */
+    Lifter.colors = colors;
+}());
+
 /**
  * Copyright 2014 Francesco Camarlinghi
  *
@@ -1070,19 +1091,20 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
  */
 ; (function ()
 {
+    log.log("LOADING Lifter.documents ...");
     var documents = {};
 
     /** List of all available color modes (aka color spaces), indexes match the ones of the DocumentMode enumeration. @private */
     var _documentColorModes = [
         -1, // Empty element as DocumentMode enumeration starts at index 1
-        charIDToTypeID('Grsc'), // Grayscale
-        charIDToTypeID('RGBC'), // RGB
-        charIDToTypeID('CMYC'), // CMYK
-        charIDToTypeID('LbCl'), // LAB
-        charIDToTypeID('Btmp'), // Bitmap
-        charIDToTypeID('Indl'), // Indexed Color
-        charIDToTypeID('Mlth'), // Multichannel
-        charIDToTypeID('Dtn '), // Duotone
+        c2id('Grsc'), // Grayscale
+        c2id('RGBC'), // RGB
+        c2id('CMYC'), // CMYK
+        c2id('LbCl'), // LAB
+        c2id('Btmp'), // Bitmap
+        c2id('Indl'), // Indexed Color
+        c2id('Mlth'), // Multichannel
+        c2id('Dtn '), // Duotone
     ];
 
     /** Sets the passed document as active and executes the specified callback. @private */
@@ -1093,7 +1115,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
         // Execute code
         callback.call(context);
-    };
+    }
 
     /** Puts the correct value in 'ref' to the get the document specified by DocumentId. @private */
     function _getDocumentIdRef(documentId, ref)
@@ -1104,12 +1126,117 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             if (documents.count() === 0)
                 throw new Error('Could not target current document: no documents are currently open.');
 
-            ref.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+            ref.putEnumerated(c2id('Dcmn'), c2id('Ordn'), c2id('Trgt'));
         }
         else
         {
             // Use DocumentId directly
-            ref.putIdentifier(charIDToTypeID('Dcmn'), documentId);
+            ref.putIdentifier(c2id('Dcmn'), documentId);
+        }
+    }
+
+    function _isSupportedExtension(inPath, category) {
+        var extension = inPath.slice(inPath.lastIndexOf('.'), inPath.length).toUpperCase();
+        var fileTypesLookup = documents.fileTypeSupport[(typeof category === 'string')? category : 'all'];
+        var prop;
+
+        for(prop in fileTypesLookup) {
+            if ( fileTypesLookup.hasOwnProperty( prop ) )
+            {
+                if(fileTypesLookup[prop].indexOf(extension) >= 0 ) { return true; }
+            }
+        }
+        // log.log('indexOf(' + extension + ') = ' + supported.indexOf(extension));
+        return false;
+    }
+
+    /**
+     * Supported document extensions. This is public so that additional properties can be added at runtime.
+     * 'all' can be opened or imported
+     * 'native' can be edited and saveIdList
+     * 'layered' can contain photoshop layers
+     */
+    documents.fileTypeSupport = {
+        'open' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            '3D Studio': ['.3DS'],
+            'Collada DAE': ['.DAE'],
+            'Google Earth 4 KMZ': ['.KMZ'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'WavefrontlOBJ': ['.OBJ'],
+            'Audio': ['.AAC', '.AC3', '.M2A', '.M4A', '.MP2', '.MP3', '.WMA', '.WM'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Camera Raw': ['.TIF', '.CRW', '.NEF', '.RAF', '.ORF', '.MRW', '.DCR', '.MOS', '.RAW', '.PEF', '.SRF', '.ONG', ',X3F', '.CR2', '.ERF', '.SR2', '.KOC', '.MFW', '.MEF', '.ARW', '.NRW', '.RW2', '.RWL', '.IIQ', ',3FR', '.FFF', '.SRW', '.GPR', '.DXO', '.HEIC', '.ARQ', '.CR3'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'Photoshop EPS': ['.EPS'],
+            'Photoshop DCS 1.0': ['.EPS'],
+            'Photoshop DCS 2.0': ['.EPS'],
+            'EPS TIFF Preview': ['.EPS'],
+            'Generic EPS': ['.EPS', '.Al3', '.Al4', '.AI5', '.Al6', '.Al7', '.Al8', '.PS', '.Al', '.EPSF', '.EPSP'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'Multi-Picture Format': ['.MPO'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDF', '.PDP'],
+            'Photoshop Raw': ['.RAW'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG', '.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'SVG': ['.SVG', '.SVGZ'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'U3D': ['.U3D'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'edit' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'OpenGL Transmission Format I GLTF/GLB': ['.GLB', '.GLTF'],
+            'PLY': ['.PLY'],
+            'STL': ['.STL'],
+            'BMP': ['.BMP', '.RLE', '.DIB'],
+            'Cineon': ['.CIN', '.SDPX', '.DPX', '.FIDO'],
+            'Dicom': ['.PCM', '.DC3', '.D1C'],
+            'GIF': ['.GIF'],
+            'IFF Format': ['.IFF', '.TDI'],
+            'IGES': ['.IGS', '.IGES'],
+            'JPEG': ['.JPG', '.JPEG', '.JPE'],
+            'JPEG 2000': ['.JPF', '.JPX', '.JP2', '.J2C', '.J2K', '.JPC'],
+            'JPEG Stereo': ['.JPS'],
+            'OpenEXR': ['.EXR'],
+            'PCX': ['.PCX'],
+            'Photoshop PDF': ['.PDP'],
+            'PICT File': ['.PCT', '.PICT'],
+            'Pixar': ['.PXR'],
+            'PNG': ['.PNG'],
+            'Portable Bit Map': ['.PBM', '.PGM', '.PPM', '.PNM', '.PFM', '.PAM'],
+            'PRC': ['.PRC'],
+            'Radiance': ['.HDR', '.RGBE', '.XYZE'],
+            'Scitex CT': ['.SCT'],
+            'Targa': ['.TGA', '.VDA', '.ICB', '.VST'],
+            'TIFF': ['.TIF', '.TIFF'],
+            'Video': ['.264', '.3GP', '.3GPP', '.AVC', '.AVl', '.F4V', '.FLV', '.M4V', '.MOV', '.MP4', '.MPE', '.MPEG', '.MPG', '.MTS', '.MXF', '.R3D', '.TS', '.voB', '.WM', '.wMV'],
+            'Wireless Bitmap': ['.WBM', '.WBMP']
+        },
+        'layers' : {
+            'Photoshop': ['.PSD', '.PDD', '.PSDT'],
+            'Large Document Format': ['.PSB'],
+            'Photoshop PDF': ['.PDP'],
+            'TIFF': ['.TIF', '.TIFF']
         }
     };
 
@@ -1118,12 +1245,12 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      * Supported document properties. This is public so that additional properties can be added at runtime.
      */
     documents.supportedProperties = {
-        'itemIndex': { typeId: charIDToTypeID('ItmI'), type: DescValueType.INTEGERTYPE, set: false, },
+        'itemIndex': { typeId: c2id('ItmI'), type: DescValueType.INTEGERTYPE, set: false, },
 
-        'documentId': { typeId: charIDToTypeID('DocI'), type: DescValueType.INTEGERTYPE, set: false, },
+        'documentId': { typeId: c2id('DocI'), type: DescValueType.INTEGERTYPE, set: false, },
 
         'width': {
-            typeId: charIDToTypeID('Wdth'),
+            typeId: c2id('Wdth'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: new UnitValue(64, 'px'),
             get: function (prop, documentId, desc)
@@ -1134,7 +1261,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'height': {
-            typeId: charIDToTypeID('Hght'),
+            typeId: c2id('Hght'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: new UnitValue(64, 'px'),
             get: function (prop, documentId, desc)
@@ -1145,20 +1272,20 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'resolution': {
-            typeId: charIDToTypeID('Rslt'),
+            typeId: c2id('Rslt'),
             type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(72, 'px'),
+            defaultValue: 72,
             get: function (prop, documentId, desc)
             {
-                return new UnitValue(desc.getUnitDoubleValue(prop.typeId), 'px');
+                return desc.getUnitDoubleValue(prop.typeId);
             },
             set: false,
         },
 
-        'name': { typeId: charIDToTypeID('Ttl '), type: DescValueType.STRINGTYPE, defaultValue: 'Untitled', set: false, },
+        'name': { typeId: c2id('Ttl '), type: DescValueType.STRINGTYPE, defaultValue: 'Untitled', set: false, },
 
         'bitsPerChannel': {
-            typeId: charIDToTypeID('Dpth'),
+            typeId: c2id('Dpth'),
             type: DescValueType.INTEGERTYPE,
             defaultValue: BitsPerChannelType.EIGHT,
             get: function (prop, documentId, desc)
@@ -1177,7 +1304,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'mode': {
-            typeId: charIDToTypeID('Md  '),
+            typeId: c2id('Md  '),
             type: DescValueType.ENUMERATEDTYPE,
             defaultValue: DocumentMode.RGB,
             get: function (prop, documentId, desc)
@@ -1206,10 +1333,10 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                     if (value === DocumentMode.BITMAP)
                     {
                         var desc2 = new ActionDescriptor();
-                        desc2.putUnitDouble(charIDToTypeID('Rslt'), charIDToTypeID('#Rsl'), documents.prop('resolution'));
-                        desc2.putEnumerated(charIDToTypeID('Mthd'), charIDToTypeID('Mthd'), charIDToTypeID('DfnD'));
-                        desc.putObject(charIDToTypeID('T   '), charIDToTypeID('BtmM'), desc2);
-                        executeAction(charIDToTypeID('CnvM'), desc, _dialogModesNo);
+                        desc2.putUnitDouble(c2id('Rslt'), c2id('#Rsl'), documents.prop('resolution'));
+                        desc2.putEnumerated(c2id('Mthd'), c2id('Mthd'), c2id('DfnD'));
+                        desc.putObject(c2id('T   '), c2id('BtmM'), desc2);
+                        executeAction(c2id('CnvM'), desc, _dialogModesNo);
                     }
                     else
                     {
@@ -1217,26 +1344,26 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
                         switch (value)
                         {
-                            case DocumentMode.GRAYSCALE: mode = _documentColorModes[1];
-                            case DocumentMode.RGB: mode = _documentColorModes[2];
-                            case DocumentMode.CMYK: mode = _documentColorModes[3];
-                            case DocumentMode.LAB: mode = _documentColorModes[4];
-                            case DocumentMode.BITMAP: mode = _documentColorModes[5];
-                            case DocumentMode.INDEXEDCOLOR: mode = _documentColorModes[6];
-                            case DocumentMode.MULTICHANNEL: mode = _documentColorModes[7];
-                            case DocumentMode.DUOTONE: mode = _documentColorModes[8];
+                            case DocumentMode.GRAYSCALE: mode = _documentColorModes[1];break;
+                            case DocumentMode.RGB: mode = _documentColorModes[2];break;
+                            case DocumentMode.CMYK: mode = _documentColorModes[3];break;
+                            case DocumentMode.LAB: mode = _documentColorModes[4];break;
+                            case DocumentMode.BITMAP: mode = _documentColorModes[5];break;
+                            case DocumentMode.INDEXEDCOLOR: mode = _documentColorModes[6];break;
+                            case DocumentMode.MULTICHANNEL: mode = _documentColorModes[7];break;
+                            case DocumentMode.DUOTONE: mode = _documentColorModes[8];break;
                             default: throw new Error('Invalid color mode: ' + value + '.');
                         }
 
-                        desc.putClass(charIDToTypeID('T   '), mode);
-                        executeAction(charIDToTypeID('CnvM'), desc, _dialogModesNo);
+                        desc.putClass(c2id('T   '), mode);
+                        executeAction(c2id('CnvM'), desc, _dialogModesNo);
                     }
                 });
             },
         },
 
         'colorProfileName': {
-            typeId: stringIDToTypeID('profile'),
+            typeId: s2id('profile'),
             type: DescValueType.STRINGTYPE,
             defaultValue: 'sRGB IEC61966-2.1',
             set: function (prop, documentId, value)
@@ -1246,15 +1373,15 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                     var ref = new ActionReference();
                     _getDocumentIdRef(documentId, ref);
                     var desc = new ActionDescriptor();
-                    desc.putReference(charIDToTypeID('null'), ref);
-                    desc.putString(stringIDToTypeID('profile'), value);
-                    executeAction(stringIDToTypeID('assignProfile'), desc, _dialogModesNo);
+                    desc.putReference(c2id('null'), ref);
+                    desc.putString(s2id('profile'), value);
+                    executeAction(s2id('assignProfile'), desc, _dialogModesNo);
                 });
             },
         },
 
         'format': {
-            typeId: charIDToTypeID('Fmt '),
+            typeId: c2id('Fmt '),
             type: DescValueType.STRINGTYPE,
             defaultValue: 'Photoshop',
             get: function (prop, documentId, desc)
@@ -1267,14 +1394,14 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             set: false,
         },
 
-        'isDirty': { typeId: charIDToTypeID('IsDr'), type: DescValueType.BOOLEANTYPE, defaultValue: false, set: false, },
+        'isDirty': { typeId: c2id('IsDr'), type: DescValueType.BOOLEANTYPE, defaultValue: false, set: false, },
 
-        'pixelAspectRatio': { typeId: stringIDToTypeID('pixelScaleFactor'), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
+        'pixelAspectRatio': { typeId: s2id('pixelScaleFactor'), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
 
-        'zoom': { typeId: charIDToTypeID('Zm  '), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
+        'zoom': { typeId: c2id('Zm  '), type: DescValueType.UNITDOUBLE, defaultValue: 1, set: false, },
 
         'xmpMetadata': {
-            typeId: stringIDToTypeID('XMPMetadataAsUTF8'),
+            typeId: s2id('XMPMetadataAsUTF8'),
             type: DescValueType.STRINGTYPE,
             defaultValue: '',
             get: function (prop, documentId, desc)
@@ -1298,7 +1425,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'fullName': {
-            typeId: charIDToTypeID('FilR'),
+            typeId: c2id('FilR'),
             type: DescValueType.ALIASTYPE,
             defaultValue: null,
             get: function (prop, documentId, desc)
@@ -1312,16 +1439,16 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
     };
 
-    /** 
+    /**
      * Gets the number of documents that are currently open.
      * @return {Number} Number of currently open documents.
      */
     documents.count = function ()
     {
         var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('NmbD'));
-        ref.putEnumerated(charIDToTypeID('capp'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
-        return executeActionGet(ref).getInteger(charIDToTypeID('NmbD'));
+        ref.putProperty(c2id('Prpr'), c2id('NmbD'));
+        ref.putEnumerated(c2id('capp'), c2id('Ordn'), c2id('Trgt'));
+        return executeActionGet(ref).getInteger(c2id('NmbD'));
     };
 
     /**
@@ -1335,13 +1462,13 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             throw new Error(['Invalid itemIndex: "', itemIndex, '".'].join(''));
 
         var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('DocI'));
-        ref.putIndex(charIDToTypeID('Dcmn'), itemIndex);
+        ref.putProperty(c2id('Prpr'), c2id('DocI'));
+        ref.putIndex(c2id('Dcmn'), itemIndex);
 
-        return executeActionGet(ref).getInteger(charIDToTypeID('DocI'));
+        return executeActionGet(ref).getInteger(c2id('DocI'));
     };
 
-    /** 
+    /**
      * Creates a new document.
      * @param {Number, UnitValue} width Document width.
      * @param {Number, UnitValue} height Document height.
@@ -1362,32 +1489,32 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         // Mode
         switch (mode)
         {
-            case NewDocumentMode.GRAYSCALE: desc.putClass(charIDToTypeID('Md  '), charIDToTypeID('Grys')); break;
-            case NewDocumentMode.CMYK: desc.putClass(charIDToTypeID('Md  '), charIDToTypeID('CMYM')); break;
-            case NewDocumentMode.LAB: desc.putClass(charIDToTypeID('Md  '), charIDToTypeID('LbCM')); break;
-            case NewDocumentMode.BITMAP: desc.putClass(charIDToTypeID('Md  '), charIDToTypeID('BtmM')); break;
-            default: desc.putClass(charIDToTypeID('Md  '), charIDToTypeID('RGBM')); break; // Default to NewDocumentMode.RGB
+            case NewDocumentMode.GRAYSCALE: desc.putClass(c2id('Md  '), c2id('Grys')); break;
+            case NewDocumentMode.CMYK: desc.putClass(c2id('Md  '), c2id('CMYM')); break;
+            case NewDocumentMode.LAB: desc.putClass(c2id('Md  '), c2id('LbCM')); break;
+            case NewDocumentMode.BITMAP: desc.putClass(c2id('Md  '), c2id('BtmM')); break;
+            default: desc.putClass(c2id('Md  '), c2id('RGBM')); break; // Default to NewDocumentMode.RGB
         }
 
         // Name
         if (typeof name === 'string' && name.length)
-            desc.putString(charIDToTypeID('Nm  '), name);
+            desc.putString(c2id('Nm  '), name);
 
         // Width
         if ((typeof width !== 'number' || width < 0) && !(width instanceof UnitValue))
             throw new Error('Invalid width: ' + width);
-        desc.putUnitDouble(charIDToTypeID('Wdth'), charIDToTypeID('#Rlt'), (width instanceof UnitValue) ? width.value : width);
+        desc.putUnitDouble(c2id('Wdth'), c2id('#Pxl'), (width instanceof UnitValue) ? width.as('px') : width);
 
         // Height
         if ((typeof height !== 'number' || height < 0) && !(height instanceof UnitValue))
             throw new Error('Invalid height: ' + height);
-        desc.putUnitDouble(charIDToTypeID('Hght'), charIDToTypeID('#Rlt'), (height instanceof UnitValue) ? height.value : height);
+        desc.putUnitDouble(c2id('Hght'), c2id('#Pxl'), (height instanceof UnitValue) ? height.as('px') : height);
 
         // Resolution
-        desc.putUnitDouble(charIDToTypeID('Rslt'), charIDToTypeID('#Rsl'), (typeof resolution === 'number' && resolution > 0) ? resolution : 72);
+        desc.putUnitDouble(c2id('Rslt'), c2id('#Rsl'), (typeof resolution === 'number' && resolution > 0) ? resolution : 72);
 
         // Pixel aspect ratio
-        desc.putDouble(stringIDToTypeID('pixelScaleFactor'), (typeof pixelAspectRatio === 'number' && pixelAspectRatio > 0) ? pixelAspectRatio : 1);
+        desc.putDouble(s2id('pixelScaleFactor'), (typeof pixelAspectRatio === 'number' && pixelAspectRatio > 0) ? pixelAspectRatio : 1);
 
         // Initial fill
         initialFill || (initialFill = DocumentFill.WHITE);
@@ -1395,45 +1522,79 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         if (initialFill instanceof SolidColor)
         {
             // SolidColor
-            desc.putEnumerated(charIDToTypeID('Fl  '), charIDToTypeID('Fl  '), charIDToTypeID('Clr '));
+            desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Clr '));
             var desc3 = new ActionDescriptor();
-            desc3.putUnitDouble(charIDToTypeID('H   '), charIDToTypeID('#Ang'), initialFill.hsb.hue);
-            desc3.putDouble(charIDToTypeID('Strt'), initialFill.hsb.saturation);
-            desc3.putDouble(charIDToTypeID('Brgh'), initialFill.hsb.brightness);
-            desc.putObject(charIDToTypeID('FlCl'), charIDToTypeID('HSBC'), desc3);
+            desc3.putUnitDouble(c2id('H   '), c2id('#Ang'), initialFill.hsb.hue);
+            desc3.putDouble(c2id('Strt'), initialFill.hsb.saturation);
+            desc3.putDouble(c2id('Brgh'), initialFill.hsb.brightness);
+            desc.putObject(c2id('FlCl'), c2id('HSBC'), desc3);
         }
         else
         {
             // DocumentFill
             switch (initialFill)
             {
-                case DocumentFill.TRANSPARENT: desc.putEnumerated(charIDToTypeID('Fl  '), charIDToTypeID('Fl  '), charIDToTypeID('Trns')); break;
-                case DocumentFill.BACKGROUNDCOLOR: desc.putEnumerated(charIDToTypeID('Fl  '), charIDToTypeID('Fl  '), charIDToTypeID('BckC')); break;
-                default: desc.putEnumerated(charIDToTypeID('Fl  '), charIDToTypeID('Fl  '), charIDToTypeID('Wht ')); break; // Default to DocumentFill.WHITE
+                case DocumentFill.TRANSPARENT: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Trns')); break;
+                case DocumentFill.BACKGROUNDCOLOR: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('BckC')); break;
+                default: desc.putEnumerated(c2id('Fl  '), c2id('Fl  '), c2id('Wht ')); break; // Default to DocumentFill.WHITE
             }
         }
 
         // Color depth
         switch (bitsPerChannel)
         {
-            case BitsPerChannelType.ONE: desc.putInteger(charIDToTypeID('Dpth'), 1); break;
-            case BitsPerChannelType.SIXTEEN: desc.putInteger(charIDToTypeID('Dpth'), 16); break;
-            case BitsPerChannelType.THIRTYTWO: desc.putInteger(charIDToTypeID('Dpth'), 32); break;
-            default: desc.putInteger(charIDToTypeID('Dpth'), 8); break; // Default to BitsPerChannelType.EIGHT
+            case BitsPerChannelType.ONE: desc.putInteger(c2id('Dpth'), 1); break;
+            case BitsPerChannelType.SIXTEEN: desc.putInteger(c2id('Dpth'), 16); break;
+            case BitsPerChannelType.THIRTYTWO: desc.putInteger(c2id('Dpth'), 32); break;
+            default: desc.putInteger(c2id('Dpth'), 8); break; // Default to BitsPerChannelType.EIGHT
         }
 
         // Color profile
         if (typeof colorProfileName === 'string' && colorProfileName.length)
-            desc.putString(stringIDToTypeID('profile'), colorProfileName);
+            desc.putString(s2id('profile'), colorProfileName);
 
         // Create new document
         var desc2 = new ActionDescriptor();
-        desc2.putObject(charIDToTypeID('Nw  '), charIDToTypeID('Dcmn'), desc);
-        executeAction(charIDToTypeID('Mk  '), desc2, _dialogModesNo);
+        desc2.putObject(c2id('Nw  '), c2id('Dcmn'), desc);
+        executeAction(c2id('Mk  '), desc2, _dialogModesNo);
         return documents;
     };
 
-    /** 
+
+
+
+
+    /**
+     * Check if photoshop can open or import a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can open or import the file type.
+     */
+    documents.fileTypeCanOpen = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'open');
+    };
+
+    /**
+     * Check if photoshop can natively edit and save a file type.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = photoshop can edit and save the file type.
+     */
+    documents.fileTypeCanEdit = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'edit');
+    };
+
+    /**
+     * Check if the file type supports photoshop layers.
+     * @param {File,String} file Either a File object or a path as string indicating the file to open.
+     * @return {Boolean} True = the file type can save photoshop layers.
+     */
+    documents.fileTypeCanHaveLayers = function (inPath)
+    {
+        return _isSupportedExtension(inPath, 'layers');
+    };
+
+    /**
      * Opens the specified document.
      * @param {File,String} file Either a File object or a path as string indicating the file to open.
      * @return Chained reference to document utilities.
@@ -1441,12 +1602,12 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     documents.open = function (file)
     {
         var desc = new ActionDescriptor();
-        desc.putPath(charIDToTypeID('null'), _ensureFile(file));
-        executeAction(charIDToTypeID('Opn '), desc, _dialogModesNo);
+        desc.putPath(c2id('null'), _ensureFile(file));
+        executeAction(c2id('Opn '), desc, _dialogModesNo);
         return documents;
     };
 
-    /** 
+    /**
      * Saves the currently active document.
      * @param {String,File} [saveIn]        If specified, document will be saved at this location. It can either be a File
      *                                      object or a path string.
@@ -1483,16 +1644,14 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
     /**
      * Closes the currently active document.
-     * @param {SaveOptions} [save] Specifies whether changes should be saved before closing, defaults to false.
+     * @param {Boolean} [save=false] Specifies whether changes should be saved before closing.
      * @return Chained reference to document utilities.
      */
     documents.close = function (save)
     {
         if (documents.count() > 0)
-        {
-            save || (save = SaveOptions.DONOTSAVECHANGES);
-            app.activeDocument.close(save);
-        }
+            app.activeDocument.close(!!save ? SaveOptions.SAVECHANGES : SaveOptions.DONOTSAVECHANGES);
+
         return documents;
     };
 
@@ -1573,7 +1732,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             ref = new ActionReference();
             _getDocumentIdRef(documentId, ref);
             desc = executeActionGet(ref);
-            return _getWrappedActionDescriptor(desc, documents.supportedProperties, documentId || desc.getInteger(charIDToTypeID('DocI')));
+            return _getWrappedActionDescriptor(desc, documents.supportedProperties, documentId || desc.getInteger(c2id('DocI')));
         }
         else
         {
@@ -1590,7 +1749,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 ref = new ActionReference();
 
                 if (prop.typeId)
-                    ref.putProperty(charIDToTypeID('Prpr'), prop.typeId);
+                    ref.putProperty(c2id('Prpr'), prop.typeId);
 
                 _getDocumentIdRef(documentId, ref);
                 desc = executeActionGet(ref);
@@ -1638,9 +1797,30 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         var originalResolution = documents.prop('resolution');
 
         // Get resize values
-        width = typeof width === 'number' ? new UnitValue(Math.abs(width), 'px') : originalWidth;
-        height = typeof height === 'number' ? new UnitValue(Math.abs(height), 'px') : originalHeight;
-        resolution = typeof resolution === 'number' ? new UnitValue(Math.abs(resolution), 'px') : originalResolution;
+        if (typeof width === 'number')
+            width = new UnitValue(width, 'px');
+        else if (!(width instanceof UnitValue))
+            width = originalWidth;
+
+        if (typeof height === 'number')
+        {
+            height = new UnitValue(height, 'px');
+        }
+        else if (!(height instanceof UnitValue))
+        {
+            if (width.type === '%')
+            {
+                // If width is specified in percentage use uniform scaling
+                height = new UnitValue(width.value, '%');
+                height.baseUnit = new UnitValue(originalHeight.as('px'), 'px');
+            }
+            else
+            {
+                height = originalHeight;
+            }
+        }
+
+        resolution = typeof resolution === 'number' ? resolution : originalResolution;
         typeof scaleStyles === 'boolean' || (scaleStyles = true);
 
         // Early exit if image is not modified
@@ -1650,42 +1830,41 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             return documents;
 
         var desc = new ActionDescriptor();
-        var unit = width.type === 'px' ? charIDToTypeID("#Pxl") : charIDToTypeID("#Prc");
 
-        if (width === height && originalWidth === originalHeight)
+        if (width/originalWidth === height/originalHeight)
         {
             // Constrain proportions
-            desc.putUnitDouble(charIDToTypeID("Wdth"), unit, width);
-            desc.putBoolean(charIDToTypeID("CnsP"), true);
+            desc.putUnitDouble(c2id("Wdth"), c2id("#Pxl"), width.as('px'));
+            desc.putBoolean(c2id("CnsP"), true);
 
             // Scale styles
-            desc.putBoolean(stringIDToTypeID("scaleStyles"), scaleStyles);
+            desc.putBoolean(s2id("scaleStyles"), scaleStyles);
         }
         else
         {
             // Non-uniform scaling
-            desc.putUnitDouble(charIDToTypeID("Wdth"), unit, width);
-            desc.putUnitDouble(charIDToTypeID("Hght"), unit, height);
+            desc.putUnitDouble(c2id("Wdth"), c2id("#Pxl"), width.as('px'));
+            desc.putUnitDouble(c2id("Hght"), c2id("#Pxl"), height.as('px'));
         }
 
         // Resolution
         if (resolution !== originalResolution)
-            desc.putUnitDouble(charIDToTypeID("Rslt"), charIDToTypeID("#Rsl"), resolution);
+            desc.putUnitDouble(c2id("Rslt"), c2id("#Rsl"), resolution);
 
         // Resample method
         switch (resampleMethod)
         {
-            case ResampleMethod.NEARESTNEIGHBOR: resampleMethod = stringIDToTypeID("nearestNeighbor"); break;
-            case ResampleMethod.BILINEAR: resampleMethod = stringIDToTypeID("bilinear"); break;
-            case ResampleMethod.BICUBIC: resampleMethod = stringIDToTypeID("bicubic"); break;
-            case ResampleMethod.BICUBICSHARPER: resampleMethod = stringIDToTypeID("bicubicSharper"); break;
-            case ResampleMethod.BICUBICSMOOTHER: resampleMethod = stringIDToTypeID("bicubicSmoother"); break;
-            default: resampleMethod = stringIDToTypeID("bicubicAutomatic"); break;
+            case ResampleMethod.NEARESTNEIGHBOR: resampleMethod = s2id("nearestNeighbor"); break;
+            case ResampleMethod.BILINEAR: resampleMethod = s2id("bilinear"); break;
+            case ResampleMethod.BICUBIC: resampleMethod = s2id("bicubic"); break;
+            case ResampleMethod.BICUBICSHARPER: resampleMethod = s2id("bicubicSharper"); break;
+            case ResampleMethod.BICUBICSMOOTHER: resampleMethod = s2id("bicubicSmoother"); break;
+            default: resampleMethod = s2id("bicubicAutomatic"); break;
         }
-        desc.putEnumerated(charIDToTypeID("Intr"), charIDToTypeID("Intp"), resampleMethod);
+        desc.putEnumerated(c2id("Intr"), c2id("Intp"), resampleMethod);
 
         // Resize
-        executeAction(charIDToTypeID("ImgS"), desc, _dialogModesNo);
+        executeAction(c2id("ImgS"), desc, _dialogModesNo);
         return documents;
     };
 
@@ -1698,18 +1877,18 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     documents.duplicate = function (duplicateName, merge)
     {
         var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+        ref.putEnumerated(c2id('Dcmn'), c2id('Ordn'), c2id('Trgt'));
 
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
+        desc.putReference(c2id('null'), ref);
 
         if (typeof duplicateName === 'string' && duplicateName.length)
-            desc.putString(charIDToTypeID('Nm  '), duplicateName);
+            desc.putString(c2id('Nm  '), duplicateName);
 
         if (merge)
-            desc.putBoolean(charIDToTypeID('Mrgd'), true);
+            desc.putBoolean(c2id('Mrgd'), true);
 
-        executeAction(charIDToTypeID('Dplc'), desc, _dialogModesNo);
+        executeAction(c2id('Dplc'), desc, _dialogModesNo);
         return documents;
     };
 
@@ -1719,7 +1898,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      */
     documents.flatten = function ()
     {
-        executeAction(charIDToTypeID('FltI'), undefined, _dialogModesNo);
+        executeAction(c2id('FltI'), undefined, _dialogModesNo);
         return documents;
     };
 
@@ -1758,10 +1937,10 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             throw new Error(['Invalid document identifier: ', documentId, '.'].join(''));
 
         var ref = new ActionReference();
-        ref.putIdentifier(charIDToTypeID('Dcmn'), documentId);
+        ref.putIdentifier(c2id('Dcmn'), documentId);
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        executeAction(charIDToTypeID('slct'), desc, _dialogModesNo);
+        desc.putReference(c2id('null'), ref);
+        executeAction(c2id('slct'), desc, _dialogModesNo);
 
         // Chaining
         return documents;
@@ -1805,7 +1984,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      *               guaranteed to be the leftmost one in UI.
      */
     Lifter.documents = documents;
+    log.log("Lifter.documents done.");
 }());
+
 /**
  * Copyright 2014 Francesco Camarlinghi
  *
@@ -1830,23 +2011,47 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 // - Property: linkedLayers.
 // - Method: move layer!
 
-; (function ()
-{
+; (function () {
+    log.debug("Lifter.layers loading...");
+    /**
+     * @namespace
+     * @alias Lifter.layers
+     */
+
+    /**
+     * Unique layer id. Will fallback to current active layer id if null or undefined
+     * @typedef {(Number|null)} LayerId
+     */
+
     var layers = {};
 
     /** Utility object used to temporary hold data during heavy operations. @private */
     var _cache = {};
 
+    _cache.refresh = function _cacheRefresh() {
+        // Cleanup cache
+        delete _cache['hasBackground'];
+        delete _cache['layerCount'];
+        // Cache some information to speed up the operation
+        _cache['hasBackground'] = layers.hasBackground();
+        _cache['layerCount'] = layers.count();
+    };
+
+    //Public access to refresh
+    layers.cacheRefresh = _cache.refresh;
+
     /** Sets the passed layer as active and executes the specified callback. @private */
     function _wrapSwitchActive(layerId, callback, context)
     {
         // Set active layer to layerId
-        if (layers.prop('layerId') !== layerId)
+        // If we do not have a valid layerId we assume we want to target
+        // the currently active layer
+        if (typeof layerId === 'number' && layers.prop('layerId') !== layerId)
             layers.stack.makeActive(layerId);
 
         // Execute code
         callback.call(context);
-    };
+    }
 
     /** Gets a ActionDescriptor holding all the properties needed for the Make Layer action. @private */
     function _getMakeLayerDescriptor(name, opacity, blendMode, color)
@@ -1856,22 +2061,22 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
         // Name
         if (typeof name === 'string' && name.length)
-            desc.putString(charIDToTypeID('Nm  '), name);
+            desc.putString(c2id('Nm  '), name);
 
         // Opacity
-        opacity = +opacity || 100.0;
-        desc.putUnitDouble(charIDToTypeID('Opct'), charIDToTypeID('#Prc'), opacity);
+        typeof opacity === 'number' || (opacity = 100.0);
+        desc.putUnitDouble(c2id('Opct'), c2id('#Prc'), opacity);
 
         // Blend mode
         (blendMode && blendMode.valueOf) || (blendMode = BlendMode.NORMAL);
-        desc.putEnumerated(charIDToTypeID('Md  '), charIDToTypeID('BlnM'), _ensureLifterBlendMode(blendMode).valueOf());
+        desc.putEnumerated(c2id('Md  '), c2id('BlnM'), _ensureLifterBlendMode(blendMode).valueOf());
 
         // Color
         (color && color.valueOf) || (color = LayerColor.NONE);
-        desc.putEnumerated(charIDToTypeID('Clr '), charIDToTypeID('Clr '), color.valueOf());
+        desc.putEnumerated(c2id('Clr '), c2id('Clr '), color.valueOf());
 
         return desc;
-    };
+    }
 
     /** Puts the correct value in 'ref' to the get the layer specified by LayerId. @private */
     function _getLayerIdRef(layerId, ref)
@@ -1881,14 +2086,14 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             // If layerId is not passed, assume current layer
             // If layerId is 0 we're targeting the background layer in a document where background is the only layer
             // Use enumeration to get the background as getting it using LayerId directly will throw an error
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+            ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Trgt'));
         }
         else
         {
             // Use layerId directly
-            ref.putIdentifier(charIDToTypeID('Lyr '), layerId);
+            ref.putIdentifier(c2id('Lyr '), layerId);
         }
-    };
+    }
 
     /** Puts the correct value in 'ref' to the get the layer specified by ItemIndex. @private */
     function _getItemIndexRef(itemIndex, ref)
@@ -1896,7 +2101,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         if (typeof itemIndex !== 'number')
         {
             // If itemIndex is not passed, assume current layer
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+            ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Trgt'));
         }
         else if (layers.count() === 0)
         {
@@ -1907,7 +2112,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
             // Use enumeration to get the background as getting it using
             // ItemIndex directly will throw an error
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+            ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Trgt'));
         }
         else
         {
@@ -1916,11 +2121,11 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 itemIndex--;
 
             // Use correct layer itemIndex
-            ref.putIndex(charIDToTypeID('Lyr '), itemIndex);
+            ref.putIndex(c2id('Lyr '), itemIndex);
         }
 
         return ref;
-    };
+    }
 
     /** Traverse layer stack in the specified direction, returning the according layer identifier. @private */
     function _getStackId(direction)
@@ -1933,13 +2138,13 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         else
         {
             var ref = new ActionReference();
-            ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('LyrI'));
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), direction);
-            return executeActionGet(ref).getInteger(charIDToTypeID('LyrI'));
+            ref.putProperty(c2id('Prpr'), c2id('LyrI'));
+            ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), direction);
+            return executeActionGet(ref).getInteger(c2id('LyrI'));
         }
 
         return layers;
-    };
+    }
 
     /** Traverse layer stack in the specified direction, selecting the according layer. @private */
     function _traverseStack(direction)
@@ -1948,17 +2153,57 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         if (layers.count() === 0)
             return;
 
-        layers.stack.makeActive(_getStackId(direction));
+            layers.stack.makeActive(_getStackId(direction));
         return layers;
     }
 
 
     /**
-     * Supported layer properties. This is public so that additional properties can be added at runtime.
+     * retrieve or mutate basic ActionReference from id or active layer
+     *
+     * @param {Number} [layerId]
+     * @param {ActionReference} [ref]   existing ActionReference to mutate
+     * @returns {ActionReference}
+     */
+    layers.ref = function (layerId, ref) {
+        ref = ref|| new ActionReference();
+        _getLayerIdRef(layerId, ref);
+        return ref;
+    };
+
+
+    /**
+     * retrieve or mutate basic ActionDescriptor from id or active layer
+     *
+     * @param {Number} [layerId]
+     * @param {ActionReference} [ref]   existing ActionReference to use or mutate
+     * @param {ActionDescriptor} [desc]   existing ActionDescriptor to mutate
+     * @returns {ActionDescriptor}
+     */
+    layers.desc = function (layerId, ref, desc) {
+        desc = desc|| new ActionDescriptor();
+        desc = executeActionGet(layers.ref(layerId,ref));
+        return desc;
+    };
+
+    /**
+     * Gets the DOM representation of the currently active document.
+     * @return {Document} The DOM representation of the currently active document, or null if no documents are open.
+     */
+    layers.toDOM = function toDom(layerId)
+    {
+        layers.stack.makeActive(layerId);
+        return app.activeDocument.activeLayer;
+    };
+
+    /** Supported layer properties. This is public so that additional properties can be added at runtime. */
+    /**
+     * @namespace
+     * @alias Lifter.layers.supportedProperties
      */
     layers.supportedProperties = {
         'itemIndex': {
-            typeId: charIDToTypeID('ItmI'),
+            typeId: c2id('ItmI'),
             type: DescValueType.INTEGERTYPE,
             set: function (prop, layerId, value)
             {
@@ -1970,21 +2215,20 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 _getLayerIdRef(layerId, ref);
 
                 var ref2 = new ActionReference();
-                ref2.putIndex(charIDToTypeID('Lyr '), value);
+                ref2.putIndex(c2id('Lyr '), value);
 
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
-                desc.putReference(charIDToTypeID('T   '), ref2);
-                desc.putBoolean(charIDToTypeID('Adjs'), false);
-                desc.putInteger(charIDToTypeID('Vrsn'), 5);
-                executeAction(charIDToTypeID('move'), desc, _dialogModesNo);
+                desc.putReference(c2id('null'), ref);
+                desc.putReference(c2id('T   '), ref2);
+                desc.putBoolean(c2id('Adjs'), false);
+                desc.putInteger(c2id('Vrsn'), 5);
+                executeAction(c2id('move'), desc, _dialogModesNo);
             },
         },
-
-        'layerId': { typeId: charIDToTypeID('LyrI'), type: DescValueType.INTEGERTYPE, set: false, },
+        'layerId': { typeId: c2id('LyrI'), type: DescValueType.INTEGERTYPE, set: false, },
 
         'name': {
-            typeId: charIDToTypeID('Nm  '),
+            typeId: c2id('Nm  '),
             type: DescValueType.STRINGTYPE,
             defaultValue: 'Layer',
             set: function (prop, layerId, value)
@@ -1993,19 +2237,19 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 _wrapSwitchActive(layerId, function ()
                 {
                     var ref = new ActionReference();
-                    ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
+                    ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Trgt'));
                     var desc = new ActionDescriptor();
-                    desc.putReference(charIDToTypeID('null'), ref);
+                    desc.putReference(c2id('null'), ref);
                     var desc2 = new ActionDescriptor();
                     desc2.putString(prop.typeId, value);
-                    desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                    executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                    desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                    executeAction(c2id('setd'), desc, _dialogModesNo);
                 });
             },
         },
 
         'color': {
-            typeId: charIDToTypeID('Clr '),
+            typeId: c2id('Clr '),
             type: DescValueType.ENUMERATEDTYPE,
             defaultValue: LayerColor.NONE,
             get: function (prop, layerId, desc)
@@ -2021,17 +2265,17 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                     var ref = new ActionReference();
                     _getLayerIdRef(layerId, ref);
                     var desc = new ActionDescriptor();
-                    desc.putReference(charIDToTypeID('null'), ref);
+                    desc.putReference(c2id('null'), ref);
                     var desc2 = new ActionDescriptor();
-                    desc2.putEnumerated(charIDToTypeID('Clr '), charIDToTypeID('Clr '), value.valueOf());
-                    desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                    executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                    desc2.putEnumerated(c2id('Clr '), c2id('Clr '), value.valueOf());
+                    desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                    executeAction(c2id('setd'), desc, _dialogModesNo);
                 });
             },
         },
 
         'visible': {
-            typeId: charIDToTypeID('Vsbl'),
+            typeId: c2id('Vsbl'),
             type: DescValueType.BOOLEANTYPE,
             defaultValue: true,
             set: function (prop, layerId, value)
@@ -2041,17 +2285,17 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var list = new ActionList();
                 list.putReference(ref);
                 var desc = new ActionDescriptor();
-                desc.putList(charIDToTypeID('null'), list);
+                desc.putList(c2id('null'), list);
 
                 if (value)
-                    executeAction(charIDToTypeID('Shw '), desc, _dialogModesNo);
+                    executeAction(c2id('Shw '), desc, _dialogModesNo);
                 else
-                    executeAction(charIDToTypeID('Hd  '), desc, _dialogModesNo);
+                    executeAction(c2id('Hd  '), desc, _dialogModesNo);
             },
         },
 
         'opacity': {
-            typeId: charIDToTypeID('Opct'),
+            typeId: c2id('Opct'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: 100.0,
             get: function (prop, layerId, desc)
@@ -2071,11 +2315,11 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Prc'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Prc'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
 
                 // Reset visibility
                 if (!oldVisible)
@@ -2084,7 +2328,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'fillOpacity': {
-            typeId: stringIDToTypeID('fillOpacity'),
+            typeId: s2id('fillOpacity'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: 100.0,
             get: function (prop, layerId, desc)
@@ -2107,11 +2351,11 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Prc'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Prc'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
 
                 // Reset visibility
                 if (!oldVisible)
@@ -2120,7 +2364,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'blendMode': {
-            typeId: charIDToTypeID('Md  '),
+            typeId: c2id('Md  '),
             type: DescValueType.ENUMERATEDTYPE,
             defaultValue: BlendMode.NORMAL,
             get: function (prop, layerId, desc)
@@ -2139,16 +2383,16 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putEnumerated(prop.typeId, charIDToTypeID('BlnM'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putEnumerated(prop.typeId, c2id('BlnM'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'type': {
-            typeId: stringIDToTypeID('layerSection'),
+            typeId: s2id('layerSection'),
             type: DescValueType.ENUMERATEDTYPE,
             get: function (prop, layerId, desc)
             {
@@ -2174,17 +2418,17 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 if (layers.prop(layerId, 'type') !== LayerType.CONTENT)
                     throw new Error('Unable to get "kind" for layer sets.');
 
-                if (desc.hasKey(stringIDToTypeID('textKey')))
+                if (desc.hasKey(s2id('textKey')))
                     return LayerKind.TEXT;
 
                 // Includes LayerKind.VIDEO
-                if (desc.hasKey(stringIDToTypeID('smartObject')))
+                if (desc.hasKey(s2id('smartObject')))
                     return LayerKind.SMARTOBJECT;
 
-                if (desc.hasKey(stringIDToTypeID('layer3D')))
+                if (desc.hasKey(s2id('layer3D')))
                     return LayerKind.LAYER3D;
 
-                var adjustmentType = stringIDToTypeID('adjustment');
+                var adjustmentType = s2id('adjustment');
 
                 if (desc.hasKey(adjustmentType))
                 {
@@ -2224,7 +2468,7 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         },
 
         'bounds': {
-            typeId: stringIDToTypeID('bounds'),
+            typeId: s2id('bounds'),
             type: DescValueType.OBJECTTYPE,
             get: function (prop, layerId, desc)
             {
@@ -2233,24 +2477,115 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 // LayerBounds seems to be always saved in pixels,
                 // but unit is loaded from document anyways
                 return new LayerBounds(
-                        bounds.getUnitDoubleValue(charIDToTypeID('Top ')),
-                        bounds.getUnitDoubleValue(charIDToTypeID('Left')),
-                        bounds.getUnitDoubleValue(charIDToTypeID('Btom')),
-                        bounds.getUnitDoubleValue(charIDToTypeID('Rght')),
-                        bounds.getUnitDoubleType(charIDToTypeID('Top '))
+                        bounds.getUnitDoubleValue(c2id('Top ')),
+                        bounds.getUnitDoubleValue(c2id('Left')),
+                        bounds.getUnitDoubleValue(c2id('Btom')),
+                        bounds.getUnitDoubleValue(c2id('Rght')),
+                        bounds.getUnitDoubleType(c2id('Top '))
                     );
             },
             set: false,
         },
 
-        'group': { typeId: charIDToTypeID('Grup'), type: DescValueType.BOOLEANTYPE, set: false, },
+        'boundsNoEffects': {
+            typeId: s2id('boundsNoEffects'),
+            type: DescValueType.OBJECTTYPE,
+            get: function (prop, layerId, desc)
+            {
+                var bounds = desc.getObjectValue(prop.typeId);
 
-        'hasLayerMask': { typeId: stringIDToTypeID('hasUserMask'), type: DescValueType.BOOLEANTYPE, set: false, },
+                // LayerBounds seems to be always saved in pixels,
+                // but unit is loaded from document anyways
+                return new LayerBounds(
+                        bounds.getUnitDoubleValue(c2id('Top ')),
+                        bounds.getUnitDoubleValue(c2id('Left')),
+                        bounds.getUnitDoubleValue(c2id('Btom')),
+                        bounds.getUnitDoubleValue(c2id('Rght')),
+                        bounds.getUnitDoubleType(c2id('Top '))
+                    );
+            },
+            set: false,
+        },
+
+        'boundsNoMask': {
+            typeId: s2id('boundsNoMask'),
+            type: DescValueType.OBJECTTYPE,
+            get: function (prop, layerId, desc)
+            {
+                var bounds = desc.getObjectValue(prop.typeId);
+
+                // LayerBounds seems to be always saved in pixels,
+                // but unit is loaded from document anyways
+                return new LayerBounds(
+                        bounds.getUnitDoubleValue(c2id('Top ')),
+                        bounds.getUnitDoubleValue(c2id('Left')),
+                        bounds.getUnitDoubleValue(c2id('Btom')),
+                        bounds.getUnitDoubleValue(c2id('Rght')),
+                        bounds.getUnitDoubleType(c2id('Top '))
+                    );
+            },
+            set: false,
+        },
+
+        // NOTE: this does not indicate that a layer is a group or set. use 'type' prop for that.
+        'group': { typeId: c2id('Grup'), type: DescValueType.BOOLEANTYPE, set: false, },
+
+        'hasLayerMask': { typeId: s2id('hasUserMask'), type: DescValueType.BOOLEANTYPE, set: false, },
+
+        'layerMaskEnabled': {
+            typeId: s2id('userMaskEnabled'),
+            type: DescValueType.BOOLEANTYPE,
+            defaultValue: true,
+            get: function (prop, layerId, desc)
+            {
+                if (!layers.prop(layerId, 'hasLayerMask'))
+                    throw new Error('Unable to get layer mask enabled: layer does not have a layer mask applied.');
+
+                return desc.getBoolean(prop.typeId);
+            },
+            set: function (prop, layerId, value)
+            {
+                if (!layers.prop(layerId, 'hasLayerMask'))
+                    throw new Error('Unable to set layer mask enabled: layer does not have a layer mask applied.');
+
+                var desc = new ActionDescriptor();
+                var ref = layers.ref(layerId);
+                desc.putReference( c2id('null'), ref );
+                    var descToggle = new ActionDescriptor();
+                    descToggle.putBoolean( c2id('UsrM'), value );
+                desc.putObject( c2id('T   '), c2id('Lyr '), descToggle );
+                executeAction( c2id('setd'), desc, DialogModes.NO );}
+            },
+
+        'layerMaskLinked': {
+            typeId: s2id('userMaskLinked'),
+            type: DescValueType.BOOLEANTYPE,
+            defaultValue: true,
+            get: function (prop, layerId, desc)
+            {
+                if (!layers.prop(layerId, 'hasLayerMask'))
+                    throw new Error('Unable to get layer mask Linked: layer does not have a layer mask applied.');
+
+                return desc.getBoolean(prop.typeId);
+            },
+            set: function (prop, layerId, value)
+            {
+                if (!layers.prop(layerId, 'hasLayerMask'))
+                    throw new Error('Unable to set layer mask Linked: layer does not have a layer mask applied.');
+
+                var desc = new ActionDescriptor();
+                var ref = layers.ref(layerId);
+                desc.putReference( c2id('null'), ref );
+                    var descToggle = new ActionDescriptor();
+                    descToggle.putBoolean( c2id('Usrs'), value );
+                desc.putObject( c2id('T   '), c2id('Lyr '), descToggle );
+                executeAction( c2id('setd'), desc, DialogModes.NO );}
+            },
 
         'layerMaskDensity': {
-            typeId: stringIDToTypeID('userMaskDensity'),
+            typeId: s2id('userMaskDensity'),
             type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(100.0, '%'),
+            defaultValue: 100.0,
             get: function (prop, layerId, desc)
             {
                 if (!layers.prop(layerId, 'hasLayerMask'))
@@ -2266,16 +2601,16 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Prc'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Prc'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'layerMaskFeather': {
-            typeId: stringIDToTypeID('userMaskFeather'),
+            typeId: s2id('userMaskFeather'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: new UnitValue(0.0, 'px'),
             get: function (prop, layerId, desc)
@@ -2293,20 +2628,67 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Pxl'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Pxl'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
-        'hasVectorMask': { typeId: stringIDToTypeID('hasVectorMask'), type: DescValueType.BOOLEANTYPE, set: false, },
+        'hasVectorMask': { typeId: s2id('hasVectorMask'), type: DescValueType.BOOLEANTYPE, set: false, },
+
+        'vectorMaskEnabled': {
+            typeId: s2id('vectorMaskEnabled'),
+            type: DescValueType.BOOLEANTYPE,
+            defaultValue: true,
+            get: function (prop, layerId, desc)
+            {
+                if (!layers.prop(layerId, 'hasVectorMask'))
+                    throw new Error('Unable to get layer mask enabled: layer does not have a layer mask applied.');
+
+                return desc.getBoolean(prop.typeId);
+            },
+            set: function (prop, layerId, value)
+            {
+                if (!layers.prop(layerId, 'hasVectorMask'))
+                    throw new Error('Unable to set layer mask enabled: layer does not have a vector mask applied.');
+
+                var desc = new ActionDescriptor();
+                var ref = layers.ref(layerId);
+                desc.putReference( c2id('null'), ref );
+                    var descToggle = new ActionDescriptor();
+                    descToggle.putBoolean( s2id( "vectorMaskEnabled" ), value );
+                desc.putObject( c2id('T   '), c2id('Lyr '), descToggle );
+                executeAction( c2id('setd'), desc, DialogModes.NO );}
+            },
+
+        'vectorMaskLinked': {
+            typeId: s2id('vectorMaskLinked'),
+            type: DescValueType.BOOLEANTYPE,
+            defaultValue: true,
+            get: function (prop, layerId, desc)
+            {
+                throw new Error('Layer property "vectorMaskLinked" can only be set, never read. It simply does not exist.');
+            },
+            set: function (prop, layerId, value)
+            {
+                if (!layers.prop(layerId, 'hasVectorMask'))
+                    throw new Error('Unable to set layer mask Linked: layer does not have a vector mask applied.');
+
+                var desc = new ActionDescriptor();
+                var ref = layers.ref(layerId);
+                desc.putReference( c2id('null'), ref );
+                    var descToggle = new ActionDescriptor();
+                    descToggle.putBoolean( s2id( "vectorMaskLinked" ), value );
+                desc.putObject( c2id('T   '), c2id('Lyr '), descToggle );
+                executeAction( c2id('setd'), desc, DialogModes.NO );}
+            },
 
         'vectorMaskDensity': {
-            typeId: stringIDToTypeID('vectorMaskDensity'),
+            typeId: s2id('vectorMaskDensity'),
             type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(100.0, '%'),
+            defaultValue: 100.0,
             get: function (prop, layerId, desc)
             {
                 if (!layers.prop(layerId, 'hasVectorMask'))
@@ -2322,16 +2704,16 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Prc'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Prc'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'vectorMaskFeather': {
-            typeId: stringIDToTypeID('vectorMaskFeather'),
+            typeId: s2id('vectorMaskFeather'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: new UnitValue(0.0, 'px'),
             get: function (prop, layerId, desc)
@@ -2349,20 +2731,20 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Pxl'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Pxl'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
-        'hasFilterMask': { typeId: stringIDToTypeID('hasFilterMask'), type: DescValueType.BOOLEANTYPE, set: false, },
+        'hasFilterMask': { typeId: s2id('hasFilterMask'), type: DescValueType.BOOLEANTYPE, set: false, },
 
         'filterMaskDensity': {
-            typeId: stringIDToTypeID('filterMaskDensity'),
+            typeId: s2id('filterMaskDensity'),
             type: DescValueType.UNITDOUBLE,
-            defaultValue: new UnitValue(100.0, '%'),
+            defaultValue: 100.0,
             get: function (prop, layerId, desc)
             {
                 if (!layers.prop(layerId, 'hasFilterMask'))
@@ -2378,16 +2760,16 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Prc'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Prc'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'filterMaskFeather': {
-            typeId: stringIDToTypeID('filterMaskFeather'),
+            typeId: s2id('filterMaskFeather'),
             type: DescValueType.UNITDOUBLE,
             defaultValue: new UnitValue(0.0, 'px'),
             get: function (prop, layerId, desc)
@@ -2405,21 +2787,21 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
                 var desc2 = new ActionDescriptor();
-                desc2.putUnitDouble(prop.typeId, charIDToTypeID('#Pxl'), value);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc2.putUnitDouble(prop.typeId, c2id('#Pxl'), value);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'allLocked': {
-            typeId: stringIDToTypeID('layerLocking'),
+            typeId: s2id('layerLocking'),
             type: DescValueType.BOOLEANTYPE,
             defaultValue: false,
             get: function (prop, layerId, desc)
             {
-                return desc.getObjectValue(prop.typeId).getBoolean(stringIDToTypeID('protectAll'));
+                return desc.getObjectValue(prop.typeId).getBoolean(s2id('protectAll'));
             },
             set: function (prop, layerId, value)
             {
@@ -2444,28 +2826,28 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                         var ref = new ActionReference();
                         _getLayerIdRef(layerId, ref);
                         var desc = new ActionDescriptor();
-                        desc.putReference(charIDToTypeID('null'), ref);
+                        desc.putReference(c2id('null'), ref);
 
                         // Set lock object
                         var lock = new ActionDescriptor();
-                        lock.putBoolean(stringIDToTypeID('protectAll'), value);
+                        lock.putBoolean(s2id('protectAll'), value);
 
                         var desc2 = new ActionDescriptor();
                         desc2.putObject(prop.typeId, prop.typeId, lock);
-                        desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                        executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                        desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                        executeAction(c2id('setd'), desc, _dialogModesNo);
                     });
                 }
             },
         },
 
         'pixelsLocked': {
-            typeId: stringIDToTypeID('layerLocking'),
+            typeId: s2id('layerLocking'),
             type: DescValueType.BOOLEANTYPE,
             defaultValue: false,
             get: function (prop, layerId, desc)
             {
-                return desc.getObjectValue(prop.typeId).getBoolean(stringIDToTypeID('protectComposite'));
+                return desc.getObjectValue(prop.typeId).getBoolean(s2id('protectComposite'));
             },
             set: function (prop, layerId, value)
             {
@@ -2478,26 +2860,26 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
 
                 // Set lock object
                 var lock = new ActionDescriptor();
-                lock.putBoolean(stringIDToTypeID('protectComposite'), value);
+                lock.putBoolean(s2id('protectComposite'), value);
 
                 var desc2 = new ActionDescriptor();
                 desc2.putObject(prop.typeId, prop.typeId, lock);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'positionLocked': {
-            typeId: stringIDToTypeID('layerLocking'),
+            typeId: s2id('layerLocking'),
             type: DescValueType.BOOLEANTYPE,
             defaultValue: false,
             get: function (prop, layerId, desc)
             {
-                return desc.getObjectValue(prop.typeId).getBoolean(stringIDToTypeID('protectPosition'));
+                return desc.getObjectValue(prop.typeId).getBoolean(s2id('protectPosition'));
             },
             set: function (prop, layerId, value)
             {
@@ -2510,26 +2892,26 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
 
                 // Set lock object
                 var lock = new ActionDescriptor();
-                lock.putBoolean(stringIDToTypeID('protectPosition'), value);
+                lock.putBoolean(s2id('protectPosition'), value);
 
                 var desc2 = new ActionDescriptor();
                 desc2.putObject(prop.typeId, prop.typeId, lock);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'transparentPixelsLocked': {
-            typeId: stringIDToTypeID('layerLocking'),
+            typeId: s2id('layerLocking'),
             type: DescValueType.BOOLEANTYPE,
             defaultValue: false,
             get: function (prop, layerId, desc)
             {
-                return desc.getObjectValue(prop.typeId).getBoolean(stringIDToTypeID('protectTransparency'));
+                return desc.getObjectValue(prop.typeId).getBoolean(s2id('protectTransparency'));
             },
             set: function (prop, layerId, value)
             {
@@ -2542,21 +2924,21 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 var ref = new ActionReference();
                 _getLayerIdRef(layerId, ref);
                 var desc = new ActionDescriptor();
-                desc.putReference(charIDToTypeID('null'), ref);
+                desc.putReference(c2id('null'), ref);
 
                 // Set lock object
                 var lock = new ActionDescriptor();
-                lock.putBoolean(stringIDToTypeID('protectTransparency'), value);
+                lock.putBoolean(s2id('protectTransparency'), value);
 
                 var desc2 = new ActionDescriptor();
                 desc2.putObject(prop.typeId, prop.typeId, lock);
-                desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), desc2);
-                executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
+                desc.putObject(c2id('T   '), c2id('Lyr '), desc2);
+                executeAction(c2id('setd'), desc, _dialogModesNo);
             },
         },
 
         'isBackgroundLayer': {
-            typeId: charIDToTypeID('Bckg'),
+            typeId: c2id('Bckg'),
             type: DescValueType.BOOLEANTYPE,
             get: function (prop, layerId, desc)
             {
@@ -2565,22 +2947,134 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             set: false,
         },
 
-        'xmpMetadata': { typeId: stringIDToTypeID('metadata'), type: DescValueType.OBJECTTYPE, set: false, },
+        'xmpMetadata': { typeId: s2id('metadata'), type: DescValueType.OBJECTTYPE, set: false, },
 
         'lastModified': {
-            typeId: stringIDToTypeID('metadata'), // lastModified is a child of xmpMetadata
+            typeId: s2id('metadata'), // lastModified is a child of xmpMetadata
             type: DescValueType.DOUBLETYPE,
             get: function (prop, layerId, desc)
             {
                 var lastModified = new Date();
-                lastModified.setTime(desc.getObjectValue(prop.typeId).getDouble(stringIDToTypeID('layerTime')) * 1000.0); // Time is stored in seconds
+                lastModified.setTime(desc.getObjectValue(prop.typeId).getDouble(s2id('layerTime')) * 1000.0); // Time is stored in seconds
                 return lastModified;
+            },
+            set: false,
+        },
+
+        'smartObject': {
+            typeId: s2id('smartObject'),
+            type: DescValueType.OBJECTTYPE,
+            get: function (prop, layerId, desc)
+            {
+                if (desc.hasKey(prop.typeId))
+                    return desc.getObjectValue(prop.typeId);
+            },
+            set: false,
+        },
+
+        'smartObjectMore': {
+            typeId: s2id('smartObjectMore'),
+            type: DescValueType.OBJECTTYPE,
+            get: function (prop, layerId, desc)
+            {
+                if (desc.hasKey(prop.typeId))
+                    return desc.getObjectValue(prop.typeId);
+            },
+            set: false,
+        },
+
+        'smartObject.link': {
+            typeId: s2id('smartObject'),
+            type: DescValueType.ALIASTYPE,
+            get: function (prop, layerId, desc)
+            {
+                if (!desc.hasKey(prop.typeId))
+                        return;
+
+                // Linked == ALIASTYPE, cloud == OBJECTTYPE
+                var soDesc = layers.prop(layerId, 'smartObject');
+                if( soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == prop.type)
+                    return String(soDesc.getPath(s2id('link')));
+            },
+            set: function (prop, layerId, value)
+            {
+                try{
+                    var desc = new ActionDescriptor();
+                    desc.putPath( c2id( "null" ), _ensureFile( value ) );
+                    executeAction( s2id( "placedLayerRelinkToFile"), desc, DialogModes.NO );
+                } catch (e) {
+                    throw new Error('Can not relink smart object...'+e.message);
+                }
+            },
+        },
+
+        'smartObject.compsList': {
+            typeId: s2id('smartObject'),
+            type: DescValueType.OBJECTTYPE,
+            get: function (prop, layerId, desc)
+            {
+                if (desc.hasKey(prop.typeId))
+                {
+                    var compsDesc = layers.prop(layerId, 'smartObject').getObjectValue(s2id('compsList'));
+                    if(compsDesc && compsDesc.hasKey(s2id('compList')))
+                    {
+                        var compList = compsDesc.getList(s2id('compList'));
+                        var compObj = {};
+
+                        //Reverse order so our layers stack properly
+                        for (var c = compList.count-1; c >= 0; c--) {
+                            var compObjDesc = compList.getObjectValue(c);
+                            var compObjID = compObjDesc.getInteger(s2id('ID'));
+                            compObj[compObjID] = compObjDesc.getString(s2id('name'));
+                        }
+                        return compObj;
+                    }
+                }
+
+            },
+            set: false,
+        },
+
+        'smartObjectMore.comp': {
+            typeId: s2id('smartObjectMore'),
+            type: DescValueType.INTEGERTYPE,
+            get: function (prop, layerId, desc)
+            {
+                if (desc.hasKey(prop.typeId))
+                    return layers.prop(layerId, 'smartObjectMore').getInteger(s2id('comp'));
+            },
+            set: function (prop, layerId, value)
+            {
+                try {
+                    value = (typeof value === "number" && value>=0 )? value:-1;
+                    var ref = layers.ref(layerId);
+
+                    if ( executeActionGet(ref).hasKey(prop.typeId) )
+                    {
+                        var desc = new ActionDescriptor();
+                        desc.putReference(c2id('null'), ref);
+                        desc.putInteger( s2id( "compID"), value );
+                        executeAction( s2id( "setPlacedLayerComp" ), desc, DialogModes.NO );
+                    }
+                } catch(e) {
+                    throw new Error('Can not set comp on smart object...'+e.message);
+                }
+            },
+        },
+
+        'smartObjectMore.resolution': {
+            typeId: s2id('smartObjectMore'),
+            type: DescValueType.UNITDOUBLE,
+            get: function (prop, layerId, desc)
+            {
+                if (desc.hasKey(prop.typeId))
+                    return layers.prop(layerId, 'smartObjectMore').getDouble(s2id('resolution'));
             },
             set: false,
         },
     };
 
-    /** 
+    /**
      * Gets the number of layers contained in the currently active document.
      * Please note: layer count will be zero if *only* the background layer is present in the document.
      * @return Layer count of the currently active document.
@@ -2592,9 +3086,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 
         // Get base count
         var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('NmbL'));
-        ref.putEnumerated(charIDToTypeID('Dcmn'), charIDToTypeID('Ordn'), charIDToTypeID('Trgt'));
-        var count = executeActionGet(ref).getInteger(charIDToTypeID('NmbL'));
+        ref.putProperty(c2id('Prpr'), c2id('NmbL'));
+        ref.putEnumerated(c2id('Dcmn'), c2id('Ordn'), c2id('Trgt'));
+        var count = executeActionGet(ref).getInteger(c2id('NmbL'));
 
         // If document has background, add 1 to layer count
         if (count > 0)
@@ -2607,9 +3101,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             else
             {
                 ref = new ActionReference();
-                ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('Bckg'));
-                ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Back'));
-                if (executeActionGet(ref).getBoolean(charIDToTypeID('Bckg')))
+                ref.putProperty(c2id('Prpr'), c2id('Bckg'));
+                ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Back'));
+                if (executeActionGet(ref).getBoolean(c2id('Bckg')))
                     count++;
             }
         }
@@ -2624,9 +3118,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     layers.getLayerIdByItemIndex = function (itemIndex)
     {
         var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('LyrI'));
+        ref.putProperty(c2id('Prpr'), c2id('LyrI'));
         _getItemIndexRef(itemIndex, ref);
-        return executeActionGet(ref).getInteger(charIDToTypeID('LyrI'));
+        return executeActionGet(ref).getInteger(c2id('LyrI'));
     };
 
     /**
@@ -2647,13 +3141,15 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         else
         {
             var ref = new ActionReference();
-            ref.putProperty(charIDToTypeID('Prpr'), charIDToTypeID('Bckg'));
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Back'));
-            return executeActionGet(ref).getBoolean(charIDToTypeID('Bckg'));
+            ref.putProperty( c2id("Prpr"), s2id( "hasBackgroundLayer" ));
+            ref.putEnumerated(c2id( "Dcmn" ),c2id( "Ordn" ),c2id( "Trgt" ));
+            var desc =  executeActionGet(ref);
+            var res = desc.getBoolean(s2id( "hasBackgroundLayer" ));
+            return res;
         }
     };
 
-    /** 
+    /**
      * Adds a new layer to the currently active document.
      * @param {String} [name] Layer name. Pass null for default value.
      * @param {String} [opacity] Layer opacity. Pass null for default value.
@@ -2664,11 +3160,11 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     layers.add = function (name, opacity, blendMode, color)
     {
         var ref = new ActionReference();
-        ref.putClass(charIDToTypeID('Lyr '));
+        ref.putClass(c2id('Lyr '));
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putObject(charIDToTypeID('Usng'), charIDToTypeID('Lyr '), _getMakeLayerDescriptor(name, opacity, blendMode, color));
-        executeAction(charIDToTypeID('Mk  '), desc, _dialogModesNo);
+        desc.putReference(c2id('null'), ref);
+        desc.putObject(c2id('Usng'), c2id('Lyr '), _getMakeLayerDescriptor(name, opacity, blendMode, color));
+        executeAction(c2id('Mk  '), desc, _dialogModesNo);
         return layers;
     };
 
@@ -2683,11 +3179,11 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     layers.addLayerSet = function (name, opacity, blendMode, color)
     {
         var ref = new ActionReference();
-        ref.putClass(stringIDToTypeID('layerSection'));
+        ref.putClass(s2id('layerSection'));
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putObject(charIDToTypeID('Usng'), stringIDToTypeID('layerSection'), _getMakeLayerDescriptor(name, opacity, blendMode, color));
-        executeAction(charIDToTypeID('Mk  '), desc, _dialogModesNo);
+        desc.putReference(c2id('null'), ref);
+        desc.putObject(c2id('Usng'), s2id('layerSection'), _getMakeLayerDescriptor(name, opacity, blendMode, color));
+        executeAction(c2id('Mk  '), desc, _dialogModesNo);
         return layers;
     };
 
@@ -2701,8 +3197,8 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         var ref = new ActionReference();
         _getLayerIdRef(layerId, ref);
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        executeAction(charIDToTypeID('Dlt '), desc, _dialogModesNo);
+        desc.putReference(c2id('null'), ref);
+        executeAction(c2id('Dlt '), desc, _dialogModesNo);
 
         // Chaining
         return layers;
@@ -2723,24 +3219,13 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             return;
 
         var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Lyr '), charIDToTypeID('Bckg'));
+        ref.putProperty(c2id('Lyr '), c2id('Bckg'));
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putObject(charIDToTypeID('T   '), charIDToTypeID('Lyr '), _getMakeLayerDescriptor(name, opacity, blendMode, color));
-        executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
-    };
+        desc.putReference(c2id('null'), ref);
+        desc.putObject(c2id('T   '), c2id('Lyr '), _getMakeLayerDescriptor(name, opacity, blendMode, color));
+        executeAction(c2id('setd'), desc, _dialogModesNo);
 
-    /**
-     * Converts the specified layer to a smart object and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @return Chained reference to layer utilities.
-     */
-    layers.convertToSmartObject = function (layerId)
-    {
-        if (typeof layerId === 'number')
-            layers.stack.makeActive(layerId);
-
-        executeAction(stringIDToTypeID('newPlacedLayer'), undefined, _dialogModesNo);
+        // Chaining
         return layers;
     };
 
@@ -2757,17 +3242,17 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         _getLayerIdRef(layerId, ref);
 
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
+        desc.putReference(c2id('null'), ref);
 
         if (documentId)
         {
             var ref2 = new ActionReference();
-            ref.putIdentifier(charIDToTypeID('Dcmn'), documentId);
-            desc.putReference(charIDToTypeID('T   '), ref2);
+            ref.putIdentifier(c2id('Dcmn'), documentId);
+            desc.putReference(c2id('T   '), ref2);
         }
 
-        desc.putInteger(charIDToTypeID('Vrsn'), 5);
-        executeAction(charIDToTypeID('Dplc'), desc, _dialogModesNo);
+        desc.putInteger(c2id('Vrsn'), 5);
+        executeAction(c2id('Dplc'), desc, _dialogModesNo);
 
         // Chaining
         return layers;
@@ -2817,17 +3302,17 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         blendMode = _ensureLifterBlendMode(blendMode);
 
         // Opacity and transparency
-        opacity = +opacity || 100.0;
+        typeof opacity === 'number' || (opacity = 100.0);
         typeof preserveTransparency === 'boolean' || (preserveTransparency = true);
 
         // Apply image
         // Source
         var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), sourceChannel.valueOf());
+        ref.putEnumerated(c2id('Chnl'), c2id('Chnl'), sourceChannel.valueOf());
 
         if (sourceLayerId === 'merged')
         {
-            ref.putEnumerated(charIDToTypeID('Lyr '), charIDToTypeID('Ordn'), charIDToTypeID('Mrgd'));
+            ref.putEnumerated(c2id('Lyr '), c2id('Ordn'), c2id('Mrgd'));
         }
         else
         {
@@ -2836,26 +3321,26 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             Lifter.documents.makeActive(sourceDocId);
 
             if (layers.prop('isBackgroundLayer'))
-                ref.putProperty(charIDToTypeID('Lyr '), charIDToTypeID('Bckg'));
+                ref.putProperty(c2id('Lyr '), c2id('Bckg'));
             else
-                ref.putIdentifier(charIDToTypeID('Lyr '), sourceLayerId);
+                ref.putIdentifier(c2id('Lyr '), sourceLayerId);
 
             Lifter.documents.makeActive(activeDocId);
         }
 
-        ref.putIdentifier(charIDToTypeID('Dcmn'), sourceDocumentId);
+        ref.putIdentifier(c2id('Dcmn'), sourceDocumentId);
 
         var desc2 = new ActionDescriptor();
-        desc2.putReference(charIDToTypeID('T   '), ref);
-        desc2.putEnumerated(charIDToTypeID('Clcl'), charIDToTypeID('Clcn'), blendMode.valueOf());
-        desc2.putUnitDouble(charIDToTypeID('Opct'), charIDToTypeID('#Prc'), opacity);
-        desc2.putBoolean(charIDToTypeID('PrsT'), preserveTransparency);
-        desc2.putBoolean(charIDToTypeID('Invr'), invert);
+        desc2.putReference(c2id('T   '), ref);
+        desc2.putEnumerated(c2id('Clcl'), c2id('Clcn'), blendMode.valueOf());
+        desc2.putUnitDouble(c2id('Opct'), c2id('#Prc'), opacity);
+        desc2.putBoolean(c2id('PrsT'), preserveTransparency);
+        desc2.putBoolean(c2id('Invr'), invert);
 
         var desc = new ActionDescriptor();
-        desc.putObject(charIDToTypeID('With'), charIDToTypeID('Clcl'), desc2);
+        desc.putObject(c2id('With'), c2id('Clcl'), desc2);
 
-        executeAction(charIDToTypeID('AppI'), desc, _dialogModesNo);
+        executeAction(c2id('AppI'), desc, _dialogModesNo);
         return layers;
     };
 
@@ -2869,9 +3354,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         if (typeof layerId === 'number')
             layers.stack.makeActive(layerId);
 
-        executeAction(charIDToTypeID('Invr'), undefined, _dialogModesNo);
+        executeAction(c2id('Invr'), undefined, _dialogModesNo);
         return layers;
-    }
+    };
 
     /**
      * Applies the specified layer into another one.
@@ -2897,22 +3382,22 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         blendMode = _ensureLifterBlendMode(blendMode);
 
         // Opacity
-        opacity = +opacity || 100.0;
+        typeof opacity === 'number' || (opacity = 100.0);
 
         // Apply fill
         var desc = new ActionDescriptor();
-        desc.putEnumerated(charIDToTypeID('Usng'), charIDToTypeID('FlCn'), charIDToTypeID('Clr '));
+        desc.putEnumerated(c2id('Usng'), c2id('FlCn'), c2id('Clr '));
 
         var desc2 = new ActionDescriptor();
-        desc2.putUnitDouble(charIDToTypeID('H   '), charIDToTypeID('#Ang'), fillColor.hsb.hue);
-        desc2.putDouble(charIDToTypeID('Strt'), fillColor.hsb.saturation);
-        desc2.putDouble(charIDToTypeID('Brgh'), fillColor.hsb.brightness);
-        desc.putObject(charIDToTypeID('Clr '), charIDToTypeID('HSBC'), desc2);
+        desc2.putUnitDouble(c2id('H   '), c2id('#Ang'), fillColor.hsb.hue);
+        desc2.putDouble(c2id('Strt'), fillColor.hsb.saturation);
+        desc2.putDouble(c2id('Brgh'), fillColor.hsb.brightness);
+        desc.putObject(c2id('Clr '), c2id('HSBC'), desc2);
 
-        desc.putUnitDouble(charIDToTypeID('Opct'), charIDToTypeID('#Prc'), opacity);
-        desc.putEnumerated(charIDToTypeID('Md  '), charIDToTypeID('BlnM'), blendMode.valueOf());
+        desc.putUnitDouble(c2id('Opct'), c2id('#Prc'), opacity);
+        desc.putEnumerated(c2id('Md  '), c2id('BlnM'), blendMode.valueOf());
 
-        executeAction(charIDToTypeID('Fl  '), desc, _dialogModesNo);
+        executeAction(c2id('Fl  '), desc, _dialogModesNo);
 
         return layers;
     };
@@ -2933,10 +3418,13 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             throw new Error('Callback must be a valid function.');
 
         var n, i;
-
-        // Cache some information to speed up the operation
-        _cache['hasBackground'] = layers.hasBackground();
-        _cache['layerCount'] = layers.count();
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
+        // // Cache some information to speed up the operation
+        // _cache['hasBackground'] = layers.hasBackground();
+        // _cache['layerCount'] = layers.count();
 
         if (reverse)
         {
@@ -2961,9 +3449,101 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             }
         }
 
-        // Cleanup cache
-        delete _cache['hasBackground'];
-        delete _cache['layerCount'];
+        // refresh in case layers were moved around
+        _cache.refresh();
+        // // Cleanup cache
+        // delete _cache['hasBackground'];
+        // delete _cache['layerCount'];
+
+        // Chaining
+        return layers;
+    };
+
+    /**
+     * Iterates over active layers, executing the specified callback on each element.
+     * Please note: Adding or removing layers
+     * while iterating is not supported.
+     * @param {Function} callback       Callback function. It is bound to context and invoked with two arguments (itemIndex, layerId).
+     *                                  If callback returns true, iteration is stopped.
+     * @param {Object} [context=null]   Callback function context.
+     * @param {Boolean} [reverse=false] Whether to iterate from the end of the layer collection.
+     * @return Chained reference to layer utilities.
+     */
+    layers.forEachSelected = layers.forEachActive = function (callback, context, reverse)
+    {
+        if (typeof callback !== 'function')
+            throw new Error('Callback must be a valid function.');
+
+        var n, i;
+        var activeLayerIds = layers.stack.getActiveLayerIds();
+        if (reverse)
+        {
+            i = activeLayerIds.length;
+            n = 0;
+
+            while (--i >= n)
+            {
+                if (callback.call(context, i, activeLayerIds[i]))
+                    break;
+            }
+        }
+        else
+        {
+            n = activeLayerIds.length;
+            i = 0;
+
+            while (i < n)
+            {
+                if (callback.call(context, i, activeLayerIds[i]))
+                    break;
+                i++;
+            }
+        }
+
+        // Chaining
+        return layers;
+    };
+
+    /**
+     * Iterates over list of layer ids, executing the specified callback on each element.
+     * Please note: Adding or removing layers
+     * while iterating is not supported.
+     * @param {Number[]} layerIds          Array of layer ids to iterate through.
+     * @param {Function} callback       Callback function. It is bound to context and invoked with two arguments (itemIndex, layerId).
+     *                                  If callback returns true, iteration is stopped.
+     * @param {Object} [context=null]   Callback function context.
+     * @param {Boolean} [reverse=false] Whether to iterate from the end of the layer collection.
+     * @return Chained reference to layer utilities.
+     */
+    layers.forEachId = function (layerIds, callback, context, reverse)
+    {
+        if (typeof callback !== 'function')
+            throw new Error('Callback must be a valid function.');
+
+        var n, i;
+        if (reverse)
+        {
+            i = layerIds.length;
+            n = 0;
+
+            while (--i >= n)
+            {
+                if (callback.call(context, i, layerIds[i]))
+                    break;
+            }
+        }
+        else
+        {
+            n = layerIds.length;
+            i = 0;
+
+            while (i < n)
+            {
+                if (callback.call(context, i, layerIds[i]))
+                    break;
+                i++;
+            }
+        }
 
         // Chaining
         return layers;
@@ -2983,8 +3563,8 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         // Parse args
         var layerId, name, value, ref, desc;
 
-        if (typeof arguments[0] === 'number'
-            || (!arguments[0] && arguments.length > 1))
+        if (typeof arguments[0] === 'number' ||
+            (!arguments[0] && arguments.length > 1))
         {
             layerId = arguments[0];
             name = arguments[1];
@@ -3002,13 +3582,25 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             ref = new ActionReference();
             _getLayerIdRef(layerId, ref);
             desc = executeActionGet(ref);
-            return _getWrappedActionDescriptor(desc, layers.supportedProperties, layerId || desc.getInteger(charIDToTypeID('LyrI')));
+            return _getWrappedActionDescriptor(desc, layers.supportedProperties, layerId || desc.getInteger(c2id('LyrI')));
         }
         else
         {
-            // Find property
+            // If unsupported, try generic getter
             if (!layers.supportedProperties.hasOwnProperty(name))
-                throw new Error(['Invalid layer property: "', name, '".'].join(''));
+            {
+                if (typeof value === 'undefined')
+                {
+                    try{
+                        return _getDescPropByName(layers.desc(layerId), name);
+                    } catch (e) {
+                        log.warn(['Invalid layer property: "', name, '".'].join(''));
+                        return;
+                    }
+                } else {
+                    throw new Error(['Setting property "', name, '" is not supported by Lifter.'].join(''));
+                }
+            }
 
             var prop = layers.supportedProperties[name];
 
@@ -3019,10 +3611,15 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
                 ref = new ActionReference();
 
                 if (prop.typeId)
-                    ref.putProperty(charIDToTypeID('Prpr'), prop.typeId);
+                    ref.putProperty(c2id('Prpr'), prop.typeId);
 
                 _getLayerIdRef(layerId, ref);
-                desc = executeActionGet(ref);
+
+                try {
+                    desc = executeActionGet(ref);
+                } catch (e) {
+                    throw new Error('Unable to find '+typeIDToStringID(prop.typeId)+' on "' + layers.prop(layerId, 'name') + '": layers do not have that property or it is un-gettable.');
+                }
 
                 if (prop.get)
                 {
@@ -3054,6 +3651,23 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
     };
 
     /**
+     * Finds all the layers with names matching the string or RegExp.
+     * @param {String, RegExp} Exact string or regular expression to search in name.
+     * @return {Number[]} An array containing seach results.
+     */
+     layers.findAllByName = function ( search )
+     {
+         var regex = (typeof search === "string")?  new RegExp('^'+search+'$'):  new RegExp(search);
+
+         var matchIDs = [];
+         layers.forEach(function(itemIndex, layerId){
+             if( layers.prop(layerId,"name").search( regex ) !== -1)
+                 matchIDs.push(layerId);
+         } );
+         return matchIDs;
+     };
+
+    /**
      * Finds all the layers that match the specified patterns.
      * @param {Object, Function} patterns Either an hash object specifying search criteria or a custom search function.
      * @param {Object} [context] Context applied to search function.
@@ -3077,12 +3691,195 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      */
     layers.findLast = _find.bind(null, layers, 2);
 
+    /**
+     * Gets an id list of all parents of the active or specified layer (or topmost layer of active layers).
+     * @param {Number} [layerId=Active layer] Layer to get parents from
+     * @param {Boolean} [doAll] If true, returns entire parent heirarchy otherwise immediate parent only.
+     * @return {Number[]} LayerIds of the all layer's parent groups in ordered list.
+     */
+    layers.getParentIds = function (inLayerId, doAll)
+    {
+        var n;
+        var i;
+        var layerId;
+        var parentIds = [];
+        var depth = 1;//if < 1, we are deeper in nested groups
+
+        //allow for getParentIds(true);
+        if (typeof inLayerId === 'boolean') { doAll = inLayerId; }
+        if (typeof inLayerId !== 'number') { inLayerId = layers.prop('layerId'); }
+
+        _cache.refresh();
+        n = _cache['layerCount'] + 1;
+        i = layers.prop(inLayerId, 'itemIndex');
+
+        while (++i < n)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if ( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth > 0) {
+                    parentIds.push(layerId);
+                    if(doAll) {
+                        depth = 0;
+                    } else {
+                        break;
+                    }
+                }
+                depth ++;
+            } else if ( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+            }
+        }
+
+        return parentIds;
+    };
+
+    /**
+     * Gets an id list of all valid children of the active or specified layer set.
+     * @param {(Number|null)} [layerId=Active layer] Layer identifier
+     * @param {Boolean} [doSubsets] get ids from subsets (subfolders) can be passed as only arg to use active layer.
+     * @return {Number[]} LayerId of the all layer set's child ids in ordered list.
+     */
+    layers.getChildIds = function (layerSetId, doAll)
+    {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var childIDs = [];
+
+        //allow for getChildIds(true);
+        if (typeof layerSetId === 'boolean') { doAll = layerSetId; }
+        if (typeof layerSetId !== 'number') { layerSetId = layers.prop('layerId'); }
+        if(!layers.isGroup(layerSetId)) {
+            throw new TypeError ('getChildIds() - ' + layers.prop(layerSetId, 'name') + ' is not a layer set.');
+        }
+
+        _cache.refresh();
+        i = layers.prop(layerSetId, 'itemIndex');
+        n = 0;
+
+        // run in reverse so we can go "top to bottom"
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
+                depth ++;
+            }
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                if(depth < 1) { break; }// we are at bottom of our target layer group
+            }
+            else {
+                // log.log(i + ", " +layers.prop(layerId, "name"));
+                if(depth == 1 || doAll) { childIDs.push(layerId); }
+            }
+        }
+
+        return childIDs;
+    };
+
+    /**
+     * Gets the identifier of all layers.
+     * @return {Number[]} LayerIds of all layers.
+     */
+    layers.getAllLayerIds = function ()
+    {
+        var allIDs = [];
+        layers.forEach(function(itemIndex, layerId){allIDs.push(layerId);} );
+        return allIDs;
+    };
+
+    /**
+     * Gets the identifier of all active layers.
+     * @return {Number[]} LayerIds of the currently active layers.
+     */
+    layers.getAllActiveLayerIds = function ()
+    {
+        var activeLayerIds = [];
+        // Filter selected layers
+        var docRef = new ActionReference();
+        docRef.putEnumerated( c2id("Dcmn"), c2id("Ordn"), c2id("Trgt") );
+        var docDesc = executeActionGet(docRef);
+
+        // Get target layer ids
+        if( docDesc.hasKey(s2id('targetLayersIDs'))) {
+            targetLayersIDsDesc = docDesc.getList( s2id('targetLayersIDs'));
+
+            for(var ii = 0; ii < targetLayersIDsDesc.count; ii++) {
+                activeLayerIds.push(Number(targetLayersIDsDesc.getReference( ii ).getIdentifier()));
+            }
+        }
+
+        return activeLayerIds;
+    };
 
     // Stack
     /**
      * Provides methods to navigate across the layers stack.
      */
     layers.stack = {};
+    layers.stack.getActiveLayerIds = layers.getAllActiveLayerIds;// alias
+    _stackCache = {};// default for active is -1, default general is 0
+
+    /**
+     * Saves a list of layer ids to a cached stack list.
+     * @method
+     * @param  {Number} cacheId  cacheId to save stack to
+     * @param  {Number[]}  layerIds list of layer ids to save
+     * @return {Object}          this layers object for chaining
+     */
+    layers.stack.saveIdList = function (cacheId, layerIds)
+    {
+        // default and sanitize
+        if (typeof cacheId !== "number"){ cacheId = 0; }
+        if (typeof layerIds !== "object"){ layerIds = layers.getAllLayerIds(); }
+        _stackCache[cacheId] = [].concat(layerIds);
+        return layers;
+    };
+
+    /**
+     * Saves ids of active layers to a cached stack list.
+     * @method
+     * @param  {Number} cacheId cacheId to save stack to
+     * @return {Object}         this layers object for chaining
+     */
+    layers.stack.saveActiveIds = function (cacheId)
+    {
+        // default and sanitize
+        if (typeof cacheId !== "number"){ cacheId = 0; }
+        layers.stack.saveIdList( cacheId, layers.getAllActiveLayerIds() );
+        return layers;
+    };
+
+    /**
+     * Retrieves layer ids from a cached stack list.
+     * @method
+     * @param  {Number} cacheId cacheId to retrieve
+     * @return {Array}          list of layers ids from cached stack
+     */
+    layers.stack.getIdList = function (cacheId)
+    {
+        // default and sanitize
+        if (typeof cacheId !== "number"){ cacheId = 0; }
+        return _stackCache[cacheId];
+    };
+
+    /**
+     * Activates and deletes a cached stack list.
+     * @method
+     * @param  {Number} cacheId cacheId to activate and remove
+     * @return {Object}         this layers object for chaining
+     */
+    layers.stack.restoreIdList = function (cacheId)
+    {
+        // default and sanitize
+        if (typeof cacheId !== "number"){ cacheId = 0; }
+        layers.stack.makeActive( layers.stack.getIdList( cacheId ) );
+        delete _stackCache[cacheId];
+        return layers;
+    };
 
     /**
      * Gets the identifier of the currently active layer.
@@ -3097,45 +3894,146 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      * Gets the identifier of the front layer.
      * @return {Number} LayerId of the front layer.
      */
-    layers.stack.getFrontLayerId = _getStackId.bind(null, charIDToTypeID('Frnt'));
+    layers.stack.getFrontLayerId = _getStackId.bind(null, c2id('Frnt'));
 
     /**
      * Gets the identifier of the bottom/background layer.
      * @return {Number} LayerId of the bottom layer.
      */
-    layers.stack.getBottomLayerId = _getStackId.bind(null, charIDToTypeID('Back'));
+    layers.stack.getBottomLayerId = _getStackId.bind(null, c2id('Back'));
 
     /**
      * Gets the identifier of the layer following the currently active one.
      * @return {Number} LayerId of the next layer.
      */
-    layers.stack.getNextLayerId = _getStackId.bind(null, charIDToTypeID('Frwr'));
+    layers.stack.getNextLayerId = _getStackId.bind(null, c2id('Frwr'));
 
     /**
      * Gets the identifier of the layer preceding the currently active one.
      * @return {Number} LayerId of the previous layer.
      */
-    layers.stack.getPreviousLayerId = _getStackId.bind(null, charIDToTypeID('Bckw'));
+    layers.stack.getPreviousLayerId = _getStackId.bind(null, c2id('Bckw'));
+
+    /**
+     * Gets the id of the next sibling layer of the currently active one in the,
+     * heirarchy, skipping children if active layer is a group.
+     * @return {Number} LayerId of the next sibling layer or -1 if bottom of group or stack
+     */
+    layers.stack.getNextSiblingLayerId = function stackGetNextSiblingLayerId(layerId) {
+        var i = layers.prop(layerId, 'itemIndex');
+        var newIndex = i - 1;
+        var lastIndex = (layers.hasBackground())? 0 : 1;
+        var depth = 1;// if >1 we are deeper in nested groups
+        var targetId;
+
+        // log.debug('getNextSiblingLayerId() of name: ' + layers.prop(layerId,'name'));
+
+        _cache.refresh();
+
+        //if next is group, find bottom of group
+        if(layers.isGroup(layerId)) {
+            // run in reverse so we can go "top to bottom"
+            while (--i > 0 && depth > 0)
+            {
+                targetId = layers.getLayerIdByItemIndex(i);
+                // log.debug('    depth: ' + depth + ', i: ' + i + ", " +layers.prop(targetId, "name"));
+                if ( layers.prop(targetId, "type") == LayerType.SETSTART ) {
+                    depth ++;
+                }
+                else if ( layers.prop(targetId, "type") == LayerType.SETEND ) {
+                    depth --;
+                    if(depth < 1) {
+                        // we are at bottom of our target layer group
+                        // jump past the SETEND layer for the group
+                        newIndex = i - 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // log.debug('  newIndex: ' + String(newIndex+1) + '/' + layers.count());
+        //if not bottom of stack
+        if(newIndex >= lastIndex) {
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.log('  Next sibling layer: '+layers.prop(targetId,'name'));
+            //if not bottom of group
+            if(layers.prop(targetId, 'type') !== LayerType.SETEND) {
+                return targetId;
+            }
+        }
+
+        return -1;
+    };
+
+    /**
+     * Gets the id of the previous sibling layer of the currently active one in the,
+     * heirarchy, skipping children if target layer is a group.
+     * @return {Number} LayerId of the previous sibling layer or -1 if top of group or stack
+     */
+    layers.stack.getPreviousSiblingLayerId = function stackGetPreviousSiblingLayerId(layerId) {
+        // NOTE: return id or -1 for easier debug bc 'undefined' or null var passed into
+        // layers.prop(undefinedVar) returns an ActionDescriptor instead of error
+        var newIndex = layers.prop(layerId, 'itemIndex') + 1;
+        var targetId;
+
+        //abort if top of layer stack
+        _cache.refresh();
+        // log.debug('getPreviousSiblingLayerId - name: ' + layers.prop(layerId,'name') + ', index: ' + String(newIndex-1) + '/' + layers.count());
+        if(newIndex > layers.count()) { return -1; }
+
+        targetId = layers.getLayerIdByItemIndex(newIndex);
+
+        //abort if top of group
+        if(layers.isGroup(targetId)) { return -1; }
+        //if prev is group, get parent of last child of that group
+        else if(layers.prop(targetId, 'type') === LayerType.SETEND) {
+            // log.debug(layers.prop(layerId,'name') + ' Prev is group...');
+            newIndex ++;
+            targetId = layers.getLayerIdByItemIndex(newIndex);
+            // log.debug('Target inside: '+layers.prop(targetId,'name'));
+            //edge case filter, don't get parent if it is empty group
+            if(layers.isGroup(targetId)) {
+                targetId = layers.getParentIds(targetId)[0];
+                // log.debug('Target parent: '+layers.prop(targetId,'name'));
+            }
+        }
+
+        return targetId;
+    };
 
     /**
      * Sets the currently active layer to the one identified by the passed LayerId.
-     * @param {Number} layerId Layer identifier.
+     * @param {(Number|Number[])} layerIdList Layer identifier or array of ids.
      * @param {Boolean} [makeVisible] Whether to make the layer RGB channels visible.
+     * @param {Boolean} [add] Whether to add or replace active layer selection.
      * @return Chained reference to layer utilities.
      */
-    layers.stack.makeActive = function (layerId, makeVisible)
+    layers.stack.makeActive = function (layerIdList, makeVisible, add)
     {
-        if (typeof layerId !== 'number' || layerId < 1)
-            throw new Error('Invalid layerId: ' + layerId);
+        // clear active if not adding
+        if ( add !== true )
+            layers.stack.makeNoneActive();
 
-        typeof makeVisible === 'boolean' || (makeVisible = false);
+        //support single layer selection
+        layerIdList = [].concat(layerIdList);
 
-        var ref = new ActionReference();
-        ref.putIdentifier(charIDToTypeID('Lyr '), layerId);
-        var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putBoolean(charIDToTypeID('MkVs'), makeVisible);
-        executeAction(charIDToTypeID('slct'), desc, _dialogModesNo);
+        for(i=0; i<layerIdList.length; i++) {
+            layerId = layerIdList[i];
+            if (typeof layerId !== 'number' || layerId < 1)
+                throw new Error('Invalid layerId: ' + layerId);
+
+            makeVisible === true || (makeVisible = false);
+
+            var ref = new ActionReference();
+            ref.putIdentifier(c2id('Lyr '), layerId);
+            var desc = new ActionDescriptor();
+            desc.putReference(c2id('null'), ref);
+            desc.putBoolean(c2id('MkVs'), makeVisible);
+            desc.putEnumerated( s2id( "selectionModifier" ), s2id( "selectionModifierType" ), s2id( "addToSelection" ) );
+
+            executeAction(c2id('slct'), desc, _dialogModesNo);
+        }
         return layers;
     };
 
@@ -3143,26 +4041,853 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      * Sets the currently active layer to the front layer.
      * @return Chained reference to layer utilities.
      */
-    layers.stack.makeFrontActive = _traverseStack.bind(null, charIDToTypeID('Frnt'));
+    layers.stack.makeAllActive = function() {
+        layers.stack.makeActive(layers.getAllLayerIds());
+    };
+
+    /**
+     * Sets the currently active layer to the front layer.
+     * @return Chained reference to layer utilities.
+     */
+    layers.stack.makeFrontActive = _traverseStack.bind(null, c2id('Frnt'));
 
     /**
      * Sets the currently active layer to the bottom/background layer.
      * @return Chained reference to layer utilities.
      */
-    layers.stack.makeBottomActive = _traverseStack.bind(null, charIDToTypeID('Back'));
+    layers.stack.makeBottomActive = _traverseStack.bind(null, c2id('Back'));
 
     /**
      * Sets the currently active layer to the one following the currently active layer.
      * @return Chained reference to layer utilities.
      */
-    layers.stack.makeNextActive = _traverseStack.bind(null, charIDToTypeID('Frwr'));
+    layers.stack.makeNextActive = _traverseStack.bind(null, c2id('Frwr'));
 
     /**
      * Sets the currently active layer to the one preceding the currently active layer.
      * @return Chained reference to layer utilities.
      */
-    layers.stack.makePreviousActive = _traverseStack.bind(null, charIDToTypeID('Bckw'));
+    layers.stack.makePreviousActive = _traverseStack.bind(null, c2id('Bckw'));
 
+    /**
+    * Clears active layers so none are active.
+    * @return Chained reference to layer utilities.
+    */
+    layers.stack.makeNoneActive = function ()
+    {
+        var desc = new ActionDescriptor();
+        var ref = new ActionReference();
+
+        ref.putEnumerated( c2id( "Lyr " ), c2id( 'Ordn' ), s2id( "targetEnum" ) );
+        desc.putReference( c2id( 'null' ), ref );
+        executeAction( s2id( 'selectNoLayers' ), desc, _dialogModesNo );
+
+        return layers;
+    };
+
+
+    // Groups
+    /**
+     * Provides methods for manipulating layer groups (sets).
+     */
+    layers.groups = {};
+
+    /**
+     * Test if layer is a group
+     * @method
+     * @param  {Number} [layerId=active layer] Id of the layer to test
+     * @return {Boolean} Layer is a group or not.
+     */
+    layers.groups.isGroup = function(layerId) {
+        return layers.prop(layerId, 'type') == LayerType.SETSTART;
+    };
+    layers.isGroup = layers.groups.isGroup;// convenience alias
+
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.getEndIndex = function groupsGetBottomIndex (groupId) {
+        var i;
+        var n;
+        var layerId;
+        var depth = 1;// if >1 we are deeper in nested groups
+
+        if (typeof groupId !== 'number') { groupId = layers.prop('layerId'); }
+
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        _cache.refresh();
+        i = layers.prop(groupId, 'itemIndex');
+        n = 0;
+
+        // run in reverse so we can go "top to bottom"
+        while (--i > n && depth > 0)
+        {
+            layerId = layers.getLayerIdByItemIndex(i);
+            // add depth for new groups, subtract when we hit end of groups
+            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+                depth ++;
+            }
+            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+                depth --;
+                // are we at bottom of our target layer group?
+                if(depth < 1) { break; }
+            }
+        }
+        var name = layers.prop(layerId,'name');
+        var isGroup = layers.isGroup(layerId);
+        var prevId = layers.getLayerIdByItemIndex(i+1);
+        var prevName = layers.prop(prevId,'name');
+        // var isGroup = layers.isGroup(layerId);
+        return i;
+    };
+
+    /**
+     * Make a new group with option to add layers from selected or Id array
+     * @method
+     * @param  {String} name      Name for new group
+     * @param  {Boolean} addLayers Add layers to group or not
+     * @param  {Number,Array} layerIds  layer Id or Array of layer Ids
+     * @return {Number} layer Id of new group.
+     */
+    layers.groups.make = function(name, addLayers, layerIds, color) {
+        var idLyr = s2id( "layer" );
+        var idOrdn = c2id( "Ordn" );
+        var idTrgt = s2id( "targetEnum" );
+        var idnull = c2id( "null" );
+        var refLyr;
+
+        var descMake = new ActionDescriptor();
+        var refClass = new ActionReference();
+        refClass.putClass( s2id( "layerSection" ) );
+        descMake.putReference( idnull, refClass );
+
+        if (typeof layerIds === "number"){
+            layerIds = [layerIds];
+        }
+
+        if(addLayers)
+        {
+            if(Array.isArray(layerIds))
+            {
+                layers.stack.makeActive(layerIds);
+            }
+            refLyr = new ActionReference();
+            refLyr.putEnumerated( idLyr, idOrdn, idTrgt );
+            descMake.putReference( c2id( "From" ), refLyr );
+        }
+
+        executeAction( s2id( "make" ), descMake, DialogModes.NO );
+
+        if(name !== undefined && name.length)
+        {
+           var descSet = new ActionDescriptor();
+           refLyr = new ActionReference();
+           refLyr.putEnumerated( idLyr, idOrdn, idTrgt );
+           descSet.putReference( idnull, refLyr );
+           var descName = new ActionDescriptor();
+           descName.putString( s2id( "name" ), name );
+           descSet.putObject( s2id( "to" ), idLyr, descName );
+           executeAction( s2id( "set" ), descSet, DialogModes.NO );
+        }
+        _cache.refresh();
+        return layers.prop('layerId');
+    };
+
+    /**
+     * Merge (flatten) a layer group
+     * @method
+     * @param  {Number} [layerId=active layer] Id of the layer to flatten
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.merge = function(layerId) {
+        layers.stack.makeActive(layerId);
+        executeAction(c2id("Mrg2"), undefined, DialogModes.NO);
+        _cache.refresh();
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers into the top of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.prepend = function groupsPrepend(groupId, layerIds, ignoreHeirarchy) {
+        // var newIndex = layers.prop(groupId, 'itemIndex');
+        // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATBEGINNING, ignoreHeirarchy);
+        //offset down one to be in top of group
+        // layers.move(layerIds, newIndex, -1);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers into the bottom of a group.
+     * @method
+     * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
+     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
+     * @return Chained reference to layer utilities.
+     */
+    layers.groups.append = function groupsAppend(groupId, layerIds, ignoreHeirarchy) {
+        // var groupDOM = layers.toDOM(groupId);
+        // var layerDOM;
+        // var i;
+        // var iCount = layerIds.length;
+        // // var newIndex;
+        // // sanity check
+        if(layers.isGroup(groupId) === false) {
+            throw new Error('"'+layers.prop(groupId,'name')+'" is not a layer set (group).');
+        }
+
+        //
+        // for (i = 0; i < iCount; i++) {
+        //     layerDOM = layers.toDOM(layerIds[i]);
+        //     groupDOM.move(layerDOM, ElementPlacement.PLACEATEND);
+        // }
+
+        layers.stack.makeActive(groupId);
+        layers.move(layerIds, groupId, ElementPlacement.PLACEATEND, ignoreHeirarchy);
+        // newIndex = layers.groups.getEndIndex(groupId);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+
+    /**
+     * Move a number of layers before (above) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveBefore = function moveBefore(layerIds, targetId, ignoreHeirarchy) {
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEBEFORE, ignoreHeirarchy);
+        // var newIndex = layers.prop(targetId, 'itemIndex');
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move a number of layers to after (below) the target layer in the stack.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer (defaults to selected)
+     * @return Chained reference to layer utilities.
+     */
+    layers.moveAfter = function moveAfter(layerIds, targetId, ignoreHeirarchy) {
+        // var newIndex = layers.prop(layers.stack.getNextSiblingLayerId(targetId), 'itemIndex');
+        layers.stack.makeActive(targetId);
+        layers.move(layerIds, targetId, ElementPlacement.PLACEAFTER, ignoreHeirarchy);
+        // layers.move(layerIds, newIndex);
+        return layers;
+    };
+
+    /**
+     * Move any number of layers to the target index in the stack, with optional
+     * placement and index offset.
+     * @method
+     * @param  {Number[]} layerIds Array of layer Ids to move
+     * @param  {(Number|null)} [targetId=active layer] Id of the target layer
+     * @param  {ElementPlacement} [position] position relative to target index
+     * @param  {Number} [indexOffset] Id of the target layer (defaults to selected)
+     *                                       (ex. ElementPlacement.PLACEATEND)
+     * @param  {Boolean} [ignoreHeirarchy] if true, will flatten heirarcy of layers being moved
+     * @return Chained reference to layer utilities.
+     */
+    layers.move = function move(layerIds, targetId, placement, indexOffset, ignoreHeirarchy) {
+        // use id so we can dynamically adjust index for multiple moves
+        var targetIndex = layers.prop(targetId,'itemIndex');
+        var newIndex;
+        var moveIds;
+        var i;
+        var iCount;
+        var layerId;
+        var layerIndex;
+        var children;
+        var lastChildId;
+        var lastChildIndex;
+        var groupEndIndex;
+
+        var targetDOM = layers.toDOM(targetId);
+        var layerDOM;
+        var tmpLayerDOM;
+        var tmpLayerIndex;
+
+        function _idFilter(id) { return !children.includes(id); }
+
+        // default args
+        indexOffset = (typeof indexOffset === 'number')? indexOffset : 0;
+        placement = (isDef(placement))? placement : ElementPlacement.PLACEBEFORE;
+
+        if(typeof targetId !== 'number') throw new Error('No invalid target index ' + targetIndex + ' .');
+
+        // happy mutation helpers
+        if (typeof layerIds === 'number') {
+            layerIds = [layerIds];
+        } else if (!L.isDef(layerIds)) {
+            layerIds = layers.stack.getActiveLayerIds();
+        }
+
+        //1st pass filter out children and throw errors
+        //avoids nested heirarchy getting flattened
+        iCount = layerIds.length;
+        moveIds = layerIds;
+        newIndex = targetIndex + indexOffset;
+        for (i = 0; i < iCount; i++) {
+            layerId = layerIds[i];
+            layerIndex = layers.prop(layerId, 'itemIndex');
+
+            // we can skip filtered items!
+            if(moveIds.includes(layerId) === false) {continue;}
+
+            if (layers.isGroup(layerId)) {
+                // can't put a group inside itself! native move() explodes
+                groupEndIndex = layers.groups.getEndIndex(layerId);
+                if (newIndex < layerIndex && newIndex >= groupEndIndex ) {
+                    throw new Error('"' + layers.prop(layerId,'name') + '" can not be moved inside "' + layers.prop(targetId,'name') + '".');
+                }
+
+                //remove children so we don't flatten the heirarchy
+                if(ignoreHeirarchy !== true) {
+                    children = layers.getChildIds(layerId, true);
+                    moveIds = moveIds.filter(_idFilter);
+                }
+            }
+        }
+
+        // 2nd pass do the actual move
+        // but wait, it gets crazier
+        iCount = moveIds.length;
+        for (i = 0; i < iCount; i++) {
+            layerId = moveIds[0];
+
+            log.log('Moving ' + layers.prop(layerId,'name'));
+            newIndex = layers.prop(targetId,'itemIndex') + indexOffset;
+
+            // NOTE: Moving into layer sets is a headache
+            // But moving layersets into others is literally BUGGED in the api.
+            // But also manually moving to bottom of a set via itemIndex has
+            // broken edgecases such as if there's an empty group as the child
+            // of the target group. Nothing just works like it should.
+
+            switch (placement) {
+                case ElementPlacement.PLACEAFTER:
+                    // if it's a group grab next sibling layer?
+                    if(layers.isGroup(targetId)) {
+                        // tmpLayerId = layers.stack.getNextSiblingLayerId(targetId);
+                        newIndex = layers.groups.getEndIndex(targetId) - 1;
+                        // newIndex = layers.prop(tmpLayerId, 'itemIndex');
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.PLACEATEND:
+                    children = layers.getChildIds(targetId);
+                    // extendscript: there's no reliable way to move to the bottom
+                    // of a layer set.
+                    // me: Hold my beer. Watch this.
+                    if(children.length) {
+                        layers.stack.makeActive(targetId);
+
+                        // get last child in target group
+                        lastChildId = children[children.length-1];
+                        lastChildIndex = layers.prop(lastChildId, 'itemIndex');
+
+                        // add temp layer
+                        tmpLayerId = layers.add().prop('layerId');
+
+                        // move tmp layer above last child
+                        layers.prop(tmpLayerId,'itemIndex',lastChildIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId, 'itemIndex');
+
+                        // now swap last child position with tmp layer
+                        layers.prop(lastChildId, 'itemIndex', tmpLayerIndex);
+                        tmpLayerIndex = layers.prop(tmpLayerId,'itemIndex');
+
+                        // should now have very last actual index...
+                        newIndex =  tmpLayerIndex - 1;
+
+                        // Thanks! I hate it.
+                        layers.remove(tmpLayerId);
+                    } else {
+                        newIndex --;
+                    }
+                    break;
+                case ElementPlacement.INSIDE:
+                case ElementPlacement.PLACEATBEGINNING:
+                    newIndex --;
+                    break;
+                case ElementPlacement.PLACEBEFORE:
+                default:
+                    //move to same index as target
+                    break;
+            }
+
+            try {
+                layers.prop(layerId, 'itemIndex', newIndex);
+            } catch (e) {
+                throw new Error('There was a problem moving "' + layers.prop(layerId,'name') + '" from index ' + layers.prop(layerId,'itemIndex') + ' to ' + newIndex);
+            }
+        }
+        return layers;
+    };
+
+    // Smart Objects
+    /**
+     * Provides methods to work with smart objects.
+     */
+    layers.smartObjects = {};
+
+    /**
+     * Make smart object layer active since some SO operations can crash otherwise.
+     * @method      _ensureSmartObjectIsActive
+     * @param       {Number}  layerId layer id of the smart object
+     * @private
+     * @return      {Object}  the layers object for chaining
+     */
+    function _ensureSmartObjectIsActive(layerId) {
+
+        // Make sure target layer is active
+        if (typeof layerId === 'number')
+            layers.stack.makeActive(layerId);
+
+        if(layers.prop('kind')!==LayerKind.SMARTOBJECT)
+            throw new Error('Layer '+layers.prop(null, 'name')+' must be a smart object.');
+
+    }
+
+    /**
+     * Check to see if layer is embedded
+     * @method isEmbedded
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is embedded smart object
+     */
+    layers.smartObjects.isEmbedded = function isEmbedded(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return (soDesc && soDesc.getBoolean(s2id('linked')) === false);
+    };
+
+    /**
+     * Check to see if layer is a linked smart object
+     * @method isLinked
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
+    layers.smartObjects.isLinked = function isLinked(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        return  (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.ALIASTYPE);
+    };
+
+    /**
+     * Check to see if layer is a CC Library file (not same as Creative Cloud Document?)
+     * @method isCloudFile
+     * @param  {Number}    layerId layer to test
+     * @return {Boolean}           if layer is a linked smart object to a Cloud Library File
+     */
+    layers.smartObjects.isCloudFile = function isCloudFile(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var isCloudFile = (soDesc && soDesc.hasKey(s2id('link')) && soDesc.getType(s2id('link')) == DescValueType.OBJECTTYPE);
+        return isCloudFile;
+    };
+
+    /**
+     * Get the cached local file path for the CC Library object
+     * @method getCloudFilePath
+     * @param  {Number}         layerId layer id of a cloud smart object
+     * @return {String}                 file path to linked cached file
+     */
+    layers.smartObjects.getCloudFilePath = function getCloudFilePath(layerId) {
+        var soDesc = layers.prop(layerId, 'smartObject');
+        var str;
+        var lookUpFile = new File(Folder.userData + "/Adobe/Creative Cloud Libraries/LIBS/librarylookupfile");
+
+        if (soDesc.getBoolean(s2id('linkMissing'))) {
+            throw new Error("Link missing in Cloud assest. Bad permissions or deteted library.");
+        }
+
+        if (!lookUpFile.exists) {
+            throw new Error("Lookup reference file for cloud assests not found.");
+        }
+
+        lookUpFile.open('r');
+        str = lookUpFile.read();
+        lookUpFile.close();
+
+		var assetUrl = soDesc.getObjectValue(stringIDToTypeID('link')).getString(stringIDToTypeID('elementReference'));
+        var refKeys = assetUrl.split("/adobe-libraries/")[1].split(";node=");
+
+		var lookUpObj = eval('('+str+')');
+		var pathToSo = lookUpObj.libraries[refKeys[0]].elements[refKeys[1]].reps[0].path;
+
+		if(!pathToSo) {
+            throw new Error("Cached cloud file not found in " + pathToSo);
+        }
+
+		return pathToSo;
+	};
+
+    /** TODO: coverage for these guys...if possible
+
+        PSString._add("placedLayerConvertToEmbedded");//DONE
+        PSString._add("placedLayerConvertToLinked");//DONE
+        PSString._add("placedLayerMakeCopy");//DONE
+        PSString._add("placedLayerEmbedAll");
+        PSString._add("placedLayerExportContents");
+        PSString._add("placedLayerRelinkToFile");//DONE:set smartobject.link property
+        PSString._add("placedLayerRelinkToLibraries");
+        PSString._add("placedLayerReplaceContents");
+        PSString._add("placedLayerReplaceMissing");
+        PSString._add("placedLayerRevealInOS");
+        PSString._add("placedLayerUpdateAllModified");
+        PSString._add("placedLayerUpdateModified");
+
+    */
+
+    /**
+     * Converts the specified layer(s) to a smart object and makes it active.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {Boolean} isLink If true, link instead of embedded smart object.
+     * @param {String, File} imageFile Path or File to valid image.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.make = function (layerId, isLink, imageFile)
+    {
+        _ensureSmartObjectIsActive(layerId);
+
+        executeAction(s2id('newPlacedLayer'), undefined, _dialogModesNo);
+
+        if(isLink)
+            layers.smartObjects.convertToLinked(null, imageFile);
+
+        return layers;
+    };
+
+    /**
+     * Creates a "New Smart Object via Copy" for embedded or linked smart objects
+     * @param {Number} [layerId=Active layer] Layer identifier.
+     * @param {String} [newName] New name for layer or file.
+     * @param {Boolean} [skipPrompt] If true, and no new name passed in, autocreate new file name.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.makeCopy = function (layerId, newName, skipPrompt) {
+        _ensureSmartObjectIsActive(layerId);
+
+        var srcLinkPath =  layers.prop('smartObject.link');
+        if( srcLinkPath ) {
+
+            // get name info
+            var srcFile = new File (srcLinkPath);
+            var searchIdx = srcFile.name.lastIndexOf('.');
+
+            var srcLinkExtension = srcFile.name.slice(searchIdx, srcFile.name.length);
+            var srcLinkNameNumber;
+            var newLinkFile;
+
+            if (!newName) {
+                newName = srcFile.name.slice(0,searchIdx);
+                // try to increment name if numbered
+                srcLinkNameNumber = newName.match(/\d*$/)[0];//get numbers off end of basename
+                if(srcLinkNameNumber.length) {
+                    newName = newName.substr(0,newName.length-srcLinkNameNumber.length);
+                    newName += Number( Number(srcLinkNameNumber) + 1 ).pad( srcLinkNameNumber.length );
+                } else {
+                    newName += '_02';
+                }
+                // default ask for new file name with autofilled prompt
+                if( !skipPrompt ) {
+                    newName = prompt("Enter a name for the new file to be linked...", newName, "New File Name");
+                    // sanity check and sanitize
+                    if( typeof newName !== "string" ){return;}
+                }
+            }
+
+            // New file name... assemble!
+            newName = newName;
+            if( newName.search(srcLinkExtension) === -1 ) {
+                newName += srcLinkExtension;
+            }
+
+            newLinkFile = new File (srcFile.parent +"/"+ newName);
+            if( newLinkFile.absoluteURI === srcFile.absoluteURI) {
+                alert ("But... that's the same file... "+newName, "Nooooooo!");
+                return;
+            }
+
+            // Existing file check and overwrite confirmation included in copy()
+            newLinkFile = Lifter.system.files.copy(srcFile, newLinkFile)[0];
+
+            // Verify
+            if( typeof newLinkFile === "undefined" ){return;}
+            if( !newLinkFile.exists ) {
+                log.error('Error copying file. No file found at destination: '+newLinkFile.name);
+                return;
+            }
+
+            // // ask smart object for "more" info
+            var soMoreDesc = layers.prop('smartObjectMore');
+
+            var compAppliedID = soMoreDesc.getInteger(s2id('comp'));
+
+            // get SmartObject's inner canvas size
+            var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
+            var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
+            var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
+
+            //Get 'nonAffineTransform' for most accurate scale
+            var soVertList = soMoreDesc.getList(s2id('nonAffineTransform'));
+            var soX = soVertList.getDouble(0);
+            var soY = soVertList.getDouble(1);
+            var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
+            var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
+
+            var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+            var soScaleX = (soWidthPlaced/soWidthInner)*soDPIRatio;
+            var soScaleY = (soHeightPlaced/soHeightInner)*soDPIRatio;
+            // $.writeln(soX);
+            // $.writeln(soY);
+            // $.writeln(soScaleX);
+            // $.writeln(soScaleY);
+            layers.smartObjects.place(newLinkFile, true, soX, soY, soScaleX*100, soScaleY*100);
+
+
+            layers.smartObjects.setComp(null, compAppliedID );
+        } else {
+            executeAction(s2id('placedLayerMakeCopy'), undefined, _dialogModesNo);
+            if(typeof newName === 'string'){ layers.prop('name', newName); }
+        }
+        return layers;
+    };
+
+    /**
+     * Opens smart object layer for editing.
+     * @param {Number} [layerId=Active layer] Layer identifier.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.edit = function (layerId)
+    {
+        _ensureSmartObjectIsActive(layerId);
+        var desc = new ActionDescriptor();
+        executeAction(s2id('placedLayerEditContents'), desc, DialogModes.NO);
+
+        // Extra flush...cause editing doesn't update active doc properly.
+        var activeDocId = Lifter.documents.getActiveDocumentId();
+        Lifter.documents.makeActive(activeDocId);
+
+        // Cleanup cache
+        _cache.refresh();
+
+        return layers;
+    };
+
+    /**
+     * Place a smart object with for link instead
+     * @param {(String|File)} imageFile Path or File to valid image.
+     * @param {Boolean} [isLink] If true, link instead of embedded smart object.
+     * @param {Number} [scaleX] Width scale to apply (as percentage SO's internal canvas size).
+     * @param {Number} [scaleY] Height scale to apply (percentage SO's internal canvas size).
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.place = function (imageFile, isLink, posX, posY, scaleX, scaleY)
+    {
+
+        scaleX = (scaleX !== undefined)?scaleX:100;
+        scaleY = (scaleY !== undefined)?scaleY:100;
+
+        if( !imageFile ) {
+            imageFile = File.openDialog();
+            if(!imageFile)
+                throw new ERROR('User aborted convert to linked object...');
+        }
+
+        try {
+            // Place now, position and scale after.
+            var descPlace = new ActionDescriptor();
+            var idPrc = c2id( "#Prc" );
+            descPlace.putPath( c2id( "null" ), _ensureFile(imageFile) );
+            descPlace.putEnumerated( c2id( "FTcs" ), c2id( "QCSt" ), c2id( "Qcsa" ) );
+            descPlace.putUnitDouble( c2id( "Wdth" ), c2id( "#Prc" ), scaleX );
+            descPlace.putUnitDouble( c2id( "Hght" ), c2id( "#Prc" ), scaleY );
+
+            if(isLink)
+                descPlace.putBoolean( c2id( "Lnkd" ), true );
+
+            executeAction( c2id( "Plc " ), descPlace, DialogModes.NO );
+
+            var newLinkedLayer = app.activeDocument.activeLayer;
+
+            // // ask smart object for "more" info
+            var soMoreDesc = layers.prop('smartObjectMore');
+
+            //Get 'nonAffineTransform' for most accurate scale
+            var soVertList = soMoreDesc.getList(s2id('nonAffineTransform'));
+            var soX = soVertList.getDouble(0);
+            var soY = soVertList.getDouble(1);
+
+            //NOTE: by using the "#Prc" in the place action above we sidestepped
+            // all the resize crap. Only percent not pixels so adjust for dpi before
+
+            // // get SmartObject's inner canvas size
+            // var sizeKeyDesc = soMoreDesc.getObjectValue(c2id('Sz  '));
+            // var soWidthInner = sizeKeyDesc.getDouble(s2id('width'));
+            // var soHeightInner = sizeKeyDesc.getDouble(s2id('height'));
+            // var soWidthPlaced = soVertList.getDouble(2)-soVertList.getDouble(0);
+            // var soHeightPlaced = soVertList.getDouble(5)-soVertList.getDouble(1);
+
+            // var tgtWidth = (scaleX/100)*soWidthInner;
+            // var tgtHeight = (scaleY/100)*soHeightInner;
+
+            // // Smart Object scaling is affected by SO internal DPI...
+            // var soDPIRatio = soMoreDesc.getDouble(s2id('resolution'))/app.activeDocument.resolution;
+
+            // var newScaleX = (tgtWidth/soWidthPlaced) / soDPIRatio;
+            // var newScaleY = (tgtHeight/soHeightPlaced) / soDPIRatio;
+
+            // newScaleX *= 100;
+            // newScaleY *= 100;
+
+            if( typeof posX == "number" && typeof posY == "number" ) {
+                newLinkedLayer.translate( -( soX - posX ) + " px", -( soY - posY ) + " px" );
+            }
+
+            // newLinkedLayer.resize(newScaleX,newScaleY, AnchorPosition.TOPLEFT);
+        } catch ( e ) {
+            throw new Error('Can not place new smart object...'+e.message);
+        }
+
+        return layers;
+    };
+
+    /**
+     * Convert a smart object to smart link
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.convertToLinked = function (layerId, imageFile)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop('kind')!==LayerKind.SMARTOBJECT ) {
+            layers.smartObjects.make(layerId, true, imageFile);
+        } else {
+            // should have a single smart object now
+
+            if( !imageFile ) {
+                imageFile = File.openDialog();
+                if(!imageFile)
+                    throw new ERROR('User aborted convert to linked object...');
+            }
+
+            try {
+                var ref = new ActionReference();
+                _getLayerIdRef(layerId, ref);
+
+                var desc = new ActionDescriptor();
+
+                desc.putReference( c2id( "null" ), ref );
+                desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
+                executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
+            } catch ( e ) {
+                throw new Error('Can not convert to linked object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
+     * Relink existing smart object to a different external file.
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @param {(String|File)} imageFile Path or File to valid image.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.reLinkToFile = function (layerId, imageFile)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop('kind')!==LayerKind.SMARTOBJECT ) {
+            layers.smartObjects.make(layerId, true, imageFile);
+        } else {
+            // should have a single smart object now
+
+            if( !imageFile ) {
+                imageFile = File.openDialog();
+                if(!imageFile)
+                    throw new ERROR('User aborted convert to linked object...');
+            }
+
+            try {
+                var ref = new ActionReference();
+                _getLayerIdRef(layerId, ref);
+
+                var desc = new ActionDescriptor();
+
+                desc.putReference( c2id( "null" ), ref );
+                desc.putPath( c2id( "Usng" ), _ensureFile(imageFile) );
+                executeAction( s2id( "placedLayerConvertToLinked" ), desc, DialogModes.NO );
+            } catch ( e ) {
+                throw new Error('Can not convert to linked object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
+     * Embed an existing smart object
+     * @param {(Number|Array|null)} [layerId=Active layer] Layer id(s).
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.convertToEmbedded = function (layerId)
+    {
+
+        // not already a single smart object? Let's do that first and come back...
+        if( layers.prop(layerId, 'kind') === LayerKind.SMARTOBJECT && layers.prop(layerId, 'smartObject.link') ) {
+            try {
+                _ensureSmartObjectIsActive(layerId);
+
+                executeAction(s2id('placedLayerConvertToEmbedded'), undefined, _dialogModesNo);
+            } catch ( e ) {
+                throw new Error('Can not convert to embedded object...'+e.message);
+            }
+        }
+
+        return layers;
+    };
+
+    /**
+     * Sets the layer comp for a Smart Object instance.
+     * @param {(Number|null)} layerId Layer identifier, null = active layer.
+     * @param {Number} compID The unique ID of the layer comp to set instance to.
+     * @return Chained reference to layer utilities.
+     */
+    layers.smartObjects.setComp = function (layerId, compID)
+    {
+        var cacheId = new Date().getMilliseconds();
+        layers.stack.saveActiveIds( cacheId );
+        layers.prop(layerId, 'smartObjectMore.comp', compID);
+        layers.stack.restoreIdList( cacheId );
+
+        return layers;
+    };
 
     // Masks
     /**
@@ -3170,38 +4895,99 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      */
     layers.masks = {};
 
+    // convenience tests... mostly just aliases for layers.prop() calls.
+    /**
+     * Check for user or vector mask on the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return {Boolean} True if user or vector mask present on layer.
+     */
+    layers.masks.hasMask = function (layerId)
+    {
+        // filter mask is not checked here. check separately.
+        return (layers.prop(layerId, 'hasUserMask')||layers.prop(layerId, 'hasVectorMask'));
+    };
+
+    /**
+     * Check for user (pixel) mask on the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return {Boolean} True if user mask present on layer.
+     */
+    layers.masks.hasLayerMask = function (layerId)
+    {
+        // filter mask is not checked here. check separately.
+        return layers.prop(layerId, 'hasUserMask');
+    };
+
+    /**
+     * Check for vector mask on the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return {Boolean} True if vector mask present on layer.
+     */
+    layers.masks.hasVectorMask = function (layerId)
+    {
+        // filter mask is not checked here. check separately.
+        return layers.prop(layerId, 'hasVectorMask');
+    };
+
+    /**
+     * Check for filter mask on the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return {Boolean} True if filter mask present on layer.
+     */
+    layers.masks.hasFilterMask = function (layerId)
+    {
+        return layers.prop(layerId, 'hasFilterMask');
+    };
+
+    // add/remove masks
+
     /**
      * Adds a layer mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addLayerMask = function (layerId)
     {
+
         // Abort if layer already has a layer mask
         if (layers.prop(layerId, 'hasLayerMask'))
             throw new Error('Unable to add layer mask: layer already has one.');
 
         // Make layer if we're targeting background
-        if (layers.prop(layerId, 'isBackgroundLayer'))
-            layers.makeLayerFromBackground();
+        if (layers.prop(layerId, 'isBackgroundLayer')) {
 
+            layers.makeLayerFromBackground();
+            layers.stack.makeBottomActive();
+        }
         // Make sure target layer is active
-        layers.stack.makeActive(layerId);
+        else if (typeof layerId === 'number') {
+            layers.stack.makeActive(layerId);
+        }
 
         var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), charIDToTypeID('Msk '));
+        ref.putEnumerated(c2id('Chnl'), c2id('Chnl'), c2id('Msk '));
 
         var desc = new ActionDescriptor();
-        desc.putClass(charIDToTypeID('Nw  '), charIDToTypeID('Chnl'));
-        desc.putReference(charIDToTypeID('At  '), ref);
-        desc.putEnumerated(charIDToTypeID('Usng'), charIDToTypeID('UsrM'), charIDToTypeID('RvlA'));
-        executeAction(charIDToTypeID('Mk  '), desc, _dialogModesNo);
+        desc.putClass(c2id('Nw  '), c2id('Chnl'));
+        desc.putReference(c2id('At  '), ref);
+
+        // selection.hasOwnProperty("bounds") returned true when no selection
+        // but would throw errors if selection.bounds accessed
+        try{
+            tmpTest = app.activeDocument.selection.bounds.length;
+            desc.putEnumerated(c2id('Usng'), c2id('UsrM'), c2id('RvlS'));
+        }
+        catch(err){
+            desc.putEnumerated(c2id('Usng'), c2id('UsrM'), c2id('RvlA'));
+        }
+
+        executeAction(c2id('Mk  '), desc, _dialogModesNo);
         return layers;
     };
 
     /**
      * Adds a vector mask to the specified layer and makes it active.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
     layers.masks.addVectorMask = function (layerId)
@@ -3215,74 +5001,434 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
             layers.makeLayerFromBackground();
 
         // Make sure target layer is active
-        layers.stack.makeActive(layerId);
+        if (typeof layerId === 'number')
+            layers.stack.makeActive(layerId);
 
         var ref = new ActionReference();
-        ref.putClass(charIDToTypeID('Path'));
+        ref.putClass(c2id('Path'));
 
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
+        desc.putReference(c2id('null'), ref);
 
         var ref2 = new ActionReference();
-        ref2.putEnumerated(charIDToTypeID('Path'), charIDToTypeID('Path'), stringIDToTypeID('vectorMask'));
-        desc.putReference(charIDToTypeID('At  '), ref2);
-        desc.putEnumerated(charIDToTypeID('Usng'), stringIDToTypeID('vectorMaskEnabled'), charIDToTypeID('RvlA'));
-        executeAction(charIDToTypeID('Mk  '), desc, _dialogModesNo);
+        ref2.putEnumerated(c2id('Path'), c2id('Path'), s2id('vectorMask'));
+        desc.putReference(c2id('At  '), ref2);
+        desc.putEnumerated(c2id('Usng'), s2id('vectorMaskEnabled'), c2id('RvlA'));
+        executeAction(c2id('Mk  '), desc, _dialogModesNo);
         return layers;
     };
 
     /**
      * Removes the layer mask from the specified layer, optionally applying it.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     * @param {Number} [layerId=Active layer] Layer id.
      * @param {Boolean} [apply] Whether to apply the mask to the layer.
      * @return Chained reference to layer utilities.
      */
     layers.masks.removeLayerMask = function ()
     {
-        // Parse args
-        var layerId, apply;
+        _overloadFunction_Number_Bool(arguments, undefined, false);
 
-        if (typeof arguments[0] === 'number')
+        // Parse args
+        var layerId = arguments[0],
+            apply = arguments[1];
+
+        var ref = new ActionReference();
+        ref.putEnumerated(c2id('Chnl'), c2id('Chnl'), c2id('Msk '));
+        _getLayerIdRef(layerId, ref);
+
+        var desc = new ActionDescriptor();
+        desc.putReference(c2id('null'), ref);
+        desc.putBoolean(c2id('Aply'), apply);
+        executeAction(c2id('Dlt '), desc, _dialogModesNo);
+        return layers;
+    };
+
+    /**
+     * Removes the vector mask from the specified layer. "apply" will either apply
+     * to the existing layer mask or directly to the layer if no layer mask found.
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @param {Boolean} [apply] Whether to rasterize and apply the mask to the layer.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.removeVectorMask = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, false);
+
+        // Parse args
+        var layerId = arguments[0],
+            apply = arguments[1],
+            desc = new ActionDescriptor();
+
+        if( apply ) {
+            // No way to directly apply vector mask, so rasterize first
+            // if existing layer mask, it intersects into that
+            var hasUserMask = layers.masks.hasLayerMask(layerId);
+            var rasterizeLayerId = s2id('rasterizeLayer');
+
+            // save layer selection and activate target layer
+            layers.stack.saveActiveIds(rasterizeLayerId);
+            layers.stack.makeActive(layerId);
+
+    		desc.putReference( c2id( "null" ), layers.ref(layerId) );
+    		desc.putEnumerated( c2id( "What" ), s2id( "rasterizeItem" ), s2id( "vectorMask" ) );
+    		executeAction( rasterizeLayerId, desc, DialogModes.NO );
+
+            // don't delete if layer mask was already present
+            if( !hasUserMask ) {
+                layers.masks.removeLayerMask(layerId,true);
+            }
+
+            // restore original selection
+            layers.stack.restoreIdList(rasterizeLayerId);
+
+        } else {
+            var ref = new ActionReference();
+            ref.putEnumerated(c2id('Path'), c2id('Path'), s2id('vectorMask'));
+            _getLayerIdRef(layerId, ref);
+
+            desc.putReference(c2id('null'), ref);
+            executeAction(c2id('Dlt '), desc, _dialogModesNo);
+        }
+
+        return layers;
+    };
+
+    /**
+     * Switch whether user mask of the specified layer is active or not so that drawing operations
+     * can be performed on it.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @param {Boolean} [active] Whether to make the layer mask active or not.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.makeLayerMaskActive = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            active = arguments[1];
+
+        // mask or RGB (layer pixels) channel?
+        var channel = ( active )? 'Msk ': 'RGB ';
+
+        var ref = new ActionReference(),
+            desc = new ActionDescriptor();
+
+        ref.putEnumerated(c2id('Chnl'), c2id('Chnl'), c2id(channel));
+        _getLayerIdRef(layerId, ref);
+
+        desc.putReference(c2id('null'), ref);
+        executeAction(c2id('slct'), desc, _dialogModesNo);
+
+        return layers;
+    };
+
+    /**
+     * Switch whether vector mask of the specified layer is active or not so that drawing operations
+     * can be performed on it.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @param {Boolean} [active] Whether to make the vector mask active or inactive.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.makeVectorMaskActive = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            active = arguments[1];
+
+        // different commands for activate and deactivate...
+        var ref = new ActionReference(),
+            desc = new ActionDescriptor(),
+            execId;
+
+        if (active)
         {
-            layerId = arguments[0];
-            apply = arguments[1] || false;
+            ref.putEnumerated(c2id('Path'), c2id('Path'), s2id('vectorMask'));
+            _getLayerIdRef(layerId, ref);
+            execId = c2id('slct');
         }
         else
         {
-            apply = arguments[0] || false;
+            ref.putClass(c2id('Path'));
+            _getLayerIdRef(layerId, ref);
+            execId = c2id('Dslc');
         }
 
-        var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), charIDToTypeID('Msk '));
-        _getLayerIdRef(layerId, ref);
+        // execute!
+        desc.putReference(c2id('null'), ref);
+        executeAction(execId, desc, _dialogModesNo);
 
-        var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putBoolean(charIDToTypeID('Aply'), apply);
-        executeAction(charIDToTypeID('Dlt '), desc, _dialogModesNo);
         return layers;
     };
 
+
     /**
-     * Removes the vector mask from the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+    * Switch whether user mask of the specified layer is active or not
+    *
+    * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+    *
+    * @param {Number} [layerId=Active layer] Layer id.
+    * @param {Boolean} [makeVisible] Whether to make the layer mask visible.
+    * @return Chained reference to layer utilities.
+    */
+    layers.masks.makeLayerMaskVisible = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            visible = arguments[1];
+
+        // different commands for activate and deactivate...
+        var ref = new ActionReference(),
+            desc = new ActionDescriptor();
+
+        ref.putEnumerated(c2id('Chnl'), c2id('Chnl'), c2id('Msk '));
+        _getLayerIdRef(layerId, ref);
+
+        desc.putReference(c2id('null'), ref);
+        desc.putBoolean(c2id('MkVs'), visible);
+        executeAction(c2id('slct'), desc, _dialogModesNo);
+
+        return layers;
+    };
+
+
+    /**
+    * Switch whether the mask(s) of the specified layer are enabled or not
+    *
+    * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+    *
+    * @param {Number} [layerId=Active layer] Layer id.
+    * @param {Boolean} [enable] Whether to make the mask affect the layer.
+    * @return Chained reference to layer utilities.
+    */
+    layers.masks.enable = function ()
+    {
+        // fake function overloading
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            enable = arguments[1];
+
+        if(layers.masks.hasLayerMask(layerId)) {
+            layers.masks.enableLayerMask(layerId, enable);
+        }
+
+        if(layers.masks.hasVectorMask(layerId)) {
+            layers.masks.enableVectorMask(layerId, enable);
+        }
+
+        return layers;
+    };
+
+
+    /**
+    * Switch whether user mask of the specified layer is enabled or not
+    *
+    * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+    *
+    * @param {Number} [layerId=Active layer] Layer id.
+    * @param {Boolean} [enable] Whether to make the mask affect the layer.
+    * @return Chained reference to layer utilities.
+    */
+    layers.masks.enableLayerMask = function ()
+    {
+        // fake function overloading
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            enable = arguments[1];
+
+        layers.prop(layerId,'layerMaskEnabled',enable);
+        return layers;
+    };
+
+
+    /**
+    * Switch whether user mask of the specified layer is enabled or not
+    *
+    * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+    *
+    * @param {Number} [layerId=Active layer] Layer id.
+    * @param {Boolean} [enable] Whether to make the mask affect the layer.
+    * @return Chained reference to layer utilities.
+    */
+    layers.masks.enableVectorMask = function ()
+    {
+        // fake function overloading
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            enable = arguments[1];
+
+        layers.prop(layerId,'vectorMaskEnabled', enable);
+
+        return layers;
+    };
+
+
+    /**
+     * Creates a selection from the layer mask of the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
      * @return Chained reference to layer utilities.
      */
-    layers.masks.removeVectorMask = function (layerId)
+    layers.masks.selectLayerMask = function (layerId)
     {
         var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Path'), charIDToTypeID('Path'), stringIDToTypeID('vectorMask'));
+        ref.putProperty(c2id('Chnl'), c2id('fsel'));
+
+        var ref2 = new ActionReference();
+        ref2.putEnumerated(c2id('Chnl'), c2id('Chnl'), c2id('Msk '));
         _getLayerIdRef(layerId, ref);
 
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        executeAction(charIDToTypeID('Dlt '), desc, _dialogModesNo);
+        desc.putReference(c2id('null'), ref);
+        desc.putReference(c2id('T   '), ref2);
+        executeAction(c2id('setd'), desc, _dialogModesNo);
+
         return layers;
     };
 
     /**
-     * Refines the layer mask of the specified layer.
-     * @param {Number} layerId Layer identifier, defaults to currently active layer if null.
+     * Creates a selection from the vector mask of the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.selectVectorMask = function (layerId)
+    {
+        var ref = new ActionReference();
+        ref.putProperty(c2id('Chnl'), c2id('fsel'));
+
+        var ref2 = new ActionReference();
+        ref2.putEnumerated(c2id('Path'), c2id('Path'), s2id('vectorMask'));
+        _getLayerIdRef(layerId, ref2);
+
+        var desc = new ActionDescriptor();
+        desc.putReference(c2id('null'), ref);
+        desc.putReference(c2id('T   '), ref2);
+
+        desc.putInteger(c2id('Vrsn'), 1);
+        desc.putBoolean(s2id('vectorMaskParams'), true);
+        executeAction(c2id('setd'), desc, _dialogModesNo);
+
+        return layers;
+    };
+
+    /**
+     * Set mask linked state for both layer and vector masks.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.setMaskLink = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        // Parse args
+        var layerId = arguments[0],
+            setLink = arguments[1];
+
+        if(layers.masks.hasLayerMask(layerId)) {
+            layers.masks.setLayerMaskLink(layerId, setLink);
+        }
+
+        if(layers.masks.hasVectorMask(layerId)) {
+            layers.masks.setVectorMaskLink(layerId, setLink);
+        }
+
+        return layers;
+        // // different commands for activate and deactivate...
+        // var ref = new ActionReference(),
+        //     desc = new ActionDescriptor();
+
+        // //default to true unless explicitly false
+        // setLink = setLink !== false;
+        //
+        // if( layers.masks.hasMask() )
+        // {
+        //     try{
+        //         var maskTypeID = (layers.masks.hasUserMask())? c2id('Usrs'):c2id( "vectorMaskLinked");
+        //         var desc = new ActionDescriptor();
+        //         var ref = layers.ref(layerId);
+        //         desc.putReference( c2id('null'), ref );
+        //             var descToggle = new ActionDescriptor();
+        //             descToggle.putBoolean( maskTypeID, setLink );
+        //         desc.putObject( c2id('T   '), c2id('Lyr '), descToggle );
+        //         executeAction( c2id('setd'), desc, DialogModes.NO );}
+        //     catch(e){
+        //         e.message = "Failed to set mask link: " + e.message;
+        //         log.error( e );
+        //     }
+        // }
+    };
+
+
+    /**
+     * Set mask linked state for layer mask.
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.setLayerMaskLink = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        if(layers.masks.hasLayerMask(arguments[0])) {
+            layers.prop(arguments[0], 'layerMaskLinked', arguments[1]);
+        }
+    };
+
+
+    /**
+     * Set mask linked state for vector mask
+     *
+     * Overloaded for 0, 1, and 2 args eg. fn(), fn(id), fn(true), fn(id, true)
+     *
+     * @param {Number} [layerId=Active layer] Layer id.
+     * @return Chained reference to layer utilities.
+     */
+    layers.masks.setVectorMaskLink = function ()
+    {
+        _overloadFunction_Number_Bool(arguments, undefined, true);
+
+        if(layers.masks.hasLayerMask(arguments[0])) {
+            layers.prop(arguments[0],'vectorMaskLinked', arguments[1]);
+        }
+
+        return layers;
+    };
+
+
+    /**
+     * Refines layer mask of specified layer as per Refine Mask workspace
+     * @method
+     * @param {Number} [layerId=Active layer] Layer id
+     * @param  {Number}  edgeBorderRadius   Edge border radius
+     * @param  {Number}  edgeBorderContrast Edge border contrast
+     * @param  {Number}  edgeSmooth         Edge smoothing
+     * @param  {Number}  edgeFeatherRadius  Edge feather radius
+     * @param  {Number}  edgeChoke          Edge choke
+     * @param  {Bool}    edgeAutoRadius     Edge auto radius enabled
+     * @param  {Boolean} edgeDecontaminate  Edge decontamination enabled
      * @return Chained reference to layer utilities.
      */
     layers.masks.refineLayerMask = function (layerId, edgeBorderRadius, edgeBorderContrast, edgeSmooth, edgeFeatherRadius, edgeChoke, edgeAutoRadius, edgeDecontaminate)
@@ -3296,185 +5442,386 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
         typeof edgeAutoRadius === 'boolean' || (edgeAutoRadius = false);
         typeof edgeDecontaminate === 'boolean' || (edgeDecontaminate = false);
 
-        var ref = new ActionReference();
-        _getLayerIdRef(layerId, ref);
-
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
+        desc.putReference( c2id( "null" ), layers.ref(layerId) );// super shortcut ref
 
-        desc.putUnitDouble(stringIDToTypeID('refineEdgeBorderRadius'), charIDToTypeID('#Pxl'), Math.abs(edgeBorderRadius));
-        desc.putUnitDouble(stringIDToTypeID('refineEdgeBorderContrast'), idPrc, Math.abs(edgeBorderContrast));
-        desc.putInteger(stringIDToTypeID('refineEdgeSmooth'), Math.abs(Math.ceil(edgeSmooth)));
-        desc.putUnitDouble(stringIDToTypeID('refineEdgeFeatherRadius'), charIDToTypeID('#Pxl'), Math.abs(edgeFeatherRadius));
-        desc.putUnitDouble(stringIDToTypeID('refineEdgeChoke'), charIDToTypeID('#Prc'), Math.abs(edgeChoke));
-        desc.putBoolean(stringIDToTypeID('refineEdgeAutoRadius'), edgeAutoRadius);
-        desc.putBoolean(stringIDToTypeID('refineEdgeDecontaminate'), edgeDecontaminate);
-        desc.putEnumerated(stringIDToTypeID('refineEdgeOutput'), stringIDToTypeID('refineEdgeOutput'), stringIDToTypeID('refineEdgeOutputUserMask'));
-        executeAction(stringIDToTypeID('refineSelectionEdge'), desc, _dialogModesNo);
+        desc.putUnitDouble(s2id('refineEdgeBorderRadius'), c2id('#Pxl'), Math.abs(edgeBorderRadius));
+        desc.putUnitDouble(s2id('refineEdgeBorderContrast'), idPrc, Math.abs(edgeBorderContrast));
+        desc.putInteger(s2id('refineEdgeSmooth'), Math.abs(Math.ceil(edgeSmooth)));
+        desc.putUnitDouble(s2id('refineEdgeFeatherRadius'), c2id('#Pxl'), Math.abs(edgeFeatherRadius));
+        desc.putUnitDouble(s2id('refineEdgeChoke'), c2id('#Prc'), Math.abs(edgeChoke));
+        desc.putBoolean(s2id('refineEdgeAutoRadius'), edgeAutoRadius);
+        desc.putBoolean(s2id('refineEdgeDecontaminate'), edgeDecontaminate);
+        desc.putEnumerated(s2id('refineEdgeOutput'), s2id('refineEdgeOutput'), s2id('refineEdgeOutputUserMask'));
+        executeAction(s2id('refineSelectionEdge'), desc, _dialogModesNo);
 
         // Chaining
         return layers;
     };
 
+
     /**
-     * Makes the layer mask of the specified layer active so that drawing operations
-     * can be performed on it.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {Boolean} [makeVisible] Whether to make the layer mask visible.
+     * Inverts the layer mask of the specified layer.
+     * @param {Number} [layerId=Active layer] Layer id
      * @return Chained reference to layer utilities.
      */
-    layers.masks.makeLayerMaskActive = function ()
+    layers.masks.invertLayerMask = function (layerId)
     {
-        // Parse args
-        var layerId, makeVisible;
+        layers.masks.makeLayerMaskVisible(layerId, true);
+        executeAction( c2id('Invr'), undefined, DialogModes.NO );
+        layers.masks.makeLayerMaskVisible(layerId, false);
 
-        if (typeof arguments[0] === 'number')
-        {
-            layerId = arguments[0];
-            makeVisible = arguments[1] || false;
+        return layers;
+    };
+
+
+    // Shapes
+    /**
+     * Provides methods to work with masks on layer and layer sets.
+     */
+    layers.shapes = {};
+
+    /**
+     * Gets fill color of selected layer
+     * @return {SolidColor} photoshop SolidColor object from the layer fill
+     */
+    layers.shapes.getFillColor = function () {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
         }
-        else
-        {
-            makeVisible = arguments[0] || false;
-        }
+        var ref1 = executeActionGet( ref );
+        var list = ref1.getList( c2id( "Adjs" ) );
+        var solidColorLayer = list.getObjectValue( 0 );
+        var color = solidColorLayer.getObjectValue( s2id( "color" ) );
+        var fillColor = new SolidColor();
+        fillColor.rgb.red = color.getDouble( c2id( 'Rd  ' ) );
+        fillColor.rgb.green = color.getDouble( c2id( 'Grn ' ) );
+        fillColor.rgb.blue = color.getDouble( c2id( 'Bl  ' ) );
+        return fillColor;
+    };
+
+    /**
+     * Sets fill color for selected layer
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setFillColor = function (layerId, fillColor) {
+        fillColor = Lifter.colors.toSolidColor(fillColor);
 
         var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), charIDToTypeID('Msk '));
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+
+        var descSet = new ActionDescriptor();
+        var descColor = Lifter.colors.toActionDescriptor(fillColor);
+        descSet.putReference( c2id( 'null' ), ref );
+        descSet.putObject( s2id( "to" ), s2id( 'solidColorLayer' ), descColor );
+        executeAction( s2id( "set" ), descSet, DialogModes.NO );
+
+        return layers;
+    };
+
+    /**
+     * Sets stroke color for selected layer
+     * @param {Boolean} bEnabled    flag for enabled or disabling stroke
+     * @param {*} [fillColor=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String} [sAlignment]    stroke alignment. Valid strings: "Center","Inside","Outside"
+     * @param {Int}     [iWidth]      stroke width in pixels
+     * @return Chained reference to layer utilities.
+     */
+    layers.shapes.setStroke = function shapeSetStroke( bEnabled, fillColor, iWidth, sAlignment ) {
+        var ref = new ActionReference();
+        if (typeof layerId !== 'number' || layerId === 0) {
+            ref.putEnumerated(s2id( 'contentLayer' ), c2id('Ordn'), c2id('Trgt'));
+        } else {
+            // Use layerId directly
+            ref.putIdentifier(s2id( 'contentLayer' ), layerId);
+        }
+        try {
+            var descSet = new ActionDescriptor();
+            ref.putEnumerated( s2id( "contentLayer" ), c2id( "Ordn" ), s2id( "targetEnum" ) );
+            descSet.putReference( c2id( "null" ), ref );
+            // style descriptors
+            var descStroke = new ActionDescriptor();
+            var descStrokeStyle = new ActionDescriptor();
+
+            if ( typeof fillColor === 'object' || typeof fillColor === 'string' ) {
+                var descColor = Lifter.colors.toActionDescriptor(fillColor);
+                descStrokeStyle.putObject( s2id( "strokeStyleContent" ), s2id( "solidColorLayer" ), descColor );
+            }
+
+            if( typeof sAlignment !== "undefined" ) {
+               var idstrokeStyleLineAlignment = s2id( "strokeStyleLineAlignment" );
+               descStrokeStyle.putEnumerated( idstrokeStyleLineAlignment, idstrokeStyleLineAlignment, s2id( "strokeStyleAlign"+sAlignment ) );
+            }
+
+            // descStrokeStyle.putInteger( s2id( "strokeStyleVersion" ), 2 );
+            descStrokeStyle.putBoolean( s2id( "strokeEnabled" ), bEnabled );
+
+            if ( typeof iWidth !== "undefined" ) {
+               descStrokeStyle.putUnitDouble( s2id( "strokeStyleLineWidth" ), c2id( "#Pxl" ), iWidth );
+            }
+
+            descStroke.putObject( s2id( "strokeStyle" ), s2id( "strokeStyle" ), descStrokeStyle );
+            descSet.putObject( s2id( "to" ), s2id( "shapeStyle" ), descStroke );
+
+            executeAction( s2id( "set" ), descSet, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); }
+
+        return layers;
+    };
+
+
+    //TODO: this only does points no curves and untested
+    layers.shapes.drawCustomShape =  function shapesDrawCustomShape( aAnchorPositions , color, opacity, name)
+    {
+        var oSubPath;
+        var oPathItem;
+        var aPathPoints = [];
+        var y = aAnchorPositions.length;
+        var i = 0;
+
+        for (i = 0; i < y; i++) {
+            aPathPoints[i] = new PathPointInfo();
+            aPathPoints[i].kind = PointKind.CORNERPOINT;
+            aPathPoints[i].anchor = aAnchorPositions[i];
+            aPathPoints[i].leftDirection = aPathPoints[i].anchor;
+            aPathPoints[i].rightDirection = aPathPoints[i].anchor;
+        }
+
+        oSubPath = new SubPathInfo();
+        oSubPath.closed = true;
+        oSubPath.operation = ShapeOperation.SHAPEADD;
+        oSubPath.entireSubPath = aPathPoints;
+        oPathItem = app.activeDocument.oPathItems.add("tmpPath", [oSubPath]);
+
+        var descUsng = new ActionDescriptor();
+        var descType = new ActionDescriptor();
+        var descClr = new ActionDescriptor();
+        var descRGB = Lifter.colors.toActionDescriptor(color);
+        var refLyr = new ActionReference();
+
+        refLyr.putClass(s2t("contentLayer"));
+        descUsng.putReference(c2t("null"), refLyr);
+
+        descClr.putObject(s2t( "color" ), s2t( "RGBColor" ), descRGB);
+        descType.putObject(c2t("Type"), s2t("solidColorLayer"), descClr);
+        descUsng.putObject(c2t("Usng"), s2t("contentLayer"), descType);
+
+        // Set Name
+        if( typeof name !== undefined && name.constructor.name === "String")
+        {
+            descClr.putString( charIDToTypeID( "Nm  " ), name );
+        }
+
+        // Set Opacity
+        if( typeof opacity !== undefined && typeof opacity !== null)
+        {
+            descClr.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+        }
+
+        executeAction(s2t( "make" ), descUsng, DialogModes.NO);
+
+        oPathItem.remove();
+    };
+
+
+    /**
+     * Draw rectangular or circular shape layer
+     * @param {String}    [shape="Rectangle"]    "Rectangle" or "Ellipse"
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {String}    [name] Name of new shape layer.
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawShape =  function shapesDrawShape(shape, x, y, w, h, options)
+    {
+        var shapeCID;
+        var opts = (isDef(options))? options : {};
+        var color = Lifter.colors.toArray(opts.color);
+        var opacity = opts.opacity;
+        var name = opts.name;
+        var corners = opts.corners;
+        if(typeof opts.corners === 'number') {
+            corners = [opts.corners, opts.corners, opts.corners, opts.corners];
+        } else if (opts.corners instanceof Array && opts.corners.length === 1) {
+            corners = [opts.corners[0], opts.corners[0], opts.corners[0], opts.corners[0]];
+        }
+
+        // not sure if more shape options?
+        switch (shape) {
+            case "Ellipse":
+            case "Elps":
+                shapeCID = "Elps";
+                break;
+            case "Rectangle":
+            case "Rctn":
+            default:
+                shapeCID = "Rctn";//default rectangle
+                break;
+        }
+
+        // desc layer
+        var descUsng = new ActionDescriptor();
+            var refContentLayer = new ActionReference();
+            refContentLayer.putClass( s2id( "contentLayer" ) );
+        descUsng.putReference( c2id( "null" ), refContentLayer );
+        var descColorLayer = new ActionDescriptor();
+
+            // color
+            var descColor = Lifter.colors.toActionDescriptor(color);
+            descColorLayer.putObject( c2id( "Type" ), s2id( "solidColorLayer" ), descColor );
+
+            // shape
+            var descShape = new ActionDescriptor();
+                var idPxl = c2id( "#Pxl" );
+                descShape.putInteger( s2id( "unitValueQuadVersion" ), 1 );
+
+                // Transform corners
+                descShape.putUnitDouble( c2id( "Top " ), idPxl, y );
+                descShape.putUnitDouble( c2id( "Left" ), idPxl, x );
+                descShape.putUnitDouble( c2id( "Btom" ), idPxl, y+h );
+                descShape.putUnitDouble( c2id( "Rght" ), idPxl, x+w );
+
+                // Rounded corner values
+                if( typeof corners !== 'undefined' && corners.length === 4) {
+                    descShape.putUnitDouble( s2id( "topLeft" ), idPxl, corners[0] );
+                    descShape.putUnitDouble( s2id( "topRight" ), idPxl, corners[1] );
+                    descShape.putUnitDouble( s2id( "bottomRight" ), idPxl, corners[2] );
+                    descShape.putUnitDouble( s2id( "bottomLeft" ), idPxl, corners[3] );
+                }
+
+            descColorLayer.putObject( c2id( "Shp " ), c2id( shapeCID ), descShape );
+
+            // Set Opacity
+            if( typeof opacity !== 'undefined' && typeof opacity !== null) {
+                descColorLayer.putUnitDouble( charIDToTypeID( "Opct" ), charIDToTypeID( "#Prc" ), opacity );
+            }
+
+        descUsng.putObject( c2id( "Usng" ), s2id( "contentLayer" ), descColorLayer );
+
+        try {
+            executeAction( c2id( "Mk  " ), descUsng, DialogModes.NO );
+        }
+        catch ( e ) { log.error( e ); return; }
+
+        // Set Name
+        if( isDef(name) && typeof name === "string") {
+            layers.prop('name', name);
+        }
+
+        return layers.prop('layerId');
+    };
+
+    /**
+     * Draw circular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawEllipse = function shapesDrawEllipse(x, y, w, h, opts)
+    {
+        return this.drawShape( "Ellipse", x, y, w, h, opts);
+    };
+
+    /**
+     * Draw rectangular shape layer
+     * @param {Number}    x    X Position
+     * @param {Number}    y    Y Position
+     * @param {Number}    w    Width
+     * @param {Number}    h    Height
+     * @param {Object}    [opts] Optional arguments
+     * @param {*}         [opts.color=Foreground color]  SolidColor object, 3 int array of 0-255 based RGB values or string (0,128,255)
+     * @param {Number}    [opacity=100] Blend opacity.
+     * @param {Number[]}  [opts.corners]  curve amount of 4 corners [t,r,b,l]
+     * @return {layerID}  layerId of new shape layer or undefined if failed.
+     */
+    layers.shapes.drawRect = function shapesDrawRect(x, y, w, h, opts)
+    {
+        return this.drawShape( "Rectangle", x, y, w, h, opts);
+    };
+
+
+    // Direct manipulation
+
+    /**
+     * Merges or rasterizes a layer group or smart object.
+     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @return Chained reference to layer utilities.
+     */
+    layers.rasterize = function (layerId)
+    {
+        var rasterizeLayerId = s2id('rasterizeLayer');
+
+        layers.stack.saveActiveIds(rasterizeLayerId);
+        layers.stack.makeActive(layerId);
+
+        if( layers.isGroup(layerId) ) {
+            layers.groups.merge(layerId);
+        } else {
+            var desc = new ActionDescriptor();
+            desc.putReference(c2id('null'), layers.ref());
+            executeAction(s2id('rasterizeLayer'), desc, _dialogModesNo);
+        }
+
+        layers.stack.restoreIdList(rasterizeLayerId);
+
+        return layers;
+    };
+
+    /**
+     * Locks or unlocks layers. Takes layer Id or uses active layers
+     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @param {Boolean} [setLocked] lock or don't lock.
+     * @return Chained reference to layer utilities.
+     */
+    layers.setLocked = function (layerId, setLocked)
+    {
+        setLocked = (setLocked !== false);//lock by default
+        layers.prop(layerId, 'allLocked', setLocked);
+        return layers;
+    };
+
+    /**
+     * Toggles visibility isolation on a layer (can't specify on/off only toggle)
+     * @method
+     * @param  {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
+     * @return Chained reference to layer utilities.
+     */
+    layers.toggleIsolate = function (layerId)
+    {
+        var ref = new ActionReference();
         _getLayerIdRef(layerId, ref);
-
+        var list = new ActionList();
+        list.putReference(ref);
         var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putBoolean(charIDToTypeID('MkVs'), makeVisible ? true : false);
-        executeAction(charIDToTypeID('slct'), desc, _dialogModesNo);
+        desc.putList(c2id('null'), list);
+        desc.putBoolean( c2id('TglO'), true );
+
+        executeAction(c2id('Shw '), desc, _dialogModesNo);
         return layers;
-    };
-
-    /**
-     * Toggle whether the layer mask of the specified layer is active so that drawing operations
-     * can be performed on it.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {Boolean} [active] Whether to make the vector mask active or inactive.
-     * @return Chained reference to layer utilities.
-     */
-    layers.masks.makeVectorMaskActive = function ()
-    {
-        // Parse args
-        var layerId, active, ref, desc;
-
-        if (typeof arguments[0] === 'number')
-        {
-            layerId = arguments[0];
-            active = arguments[1] || false;
-        }
-        else
-        {
-            active = arguments[0] || false;
-        }
-
-        if (active)
-        {
-            ref = new ActionReference();
-            ref.putEnumerated(charIDToTypeID('Path'), charIDToTypeID('Path'), stringIDToTypeID('vectorMask'));
-            _getLayerIdRef(layerId, ref);
-
-            desc = new ActionDescriptor();
-            desc.putReference(charIDToTypeID('null'), ref);
-            executeAction(charIDToTypeID('slct'), desc, _dialogModesNo);
-        }
-        else
-        {
-            ref = new ActionReference();
-            ref.putClass(charIDToTypeID('Path'));
-            _getLayerIdRef(layerId, ref);
-
-            desc = new ActionDescriptor();
-            desc.putReference(charIDToTypeID('null'), ref);
-            executeAction(charIDToTypeID('Dslc'), desc, _dialogModesNo);
-        }
-
-        return layers;
-    };
-
-    /**
-     * Makes the RGB channels of the specified layer active so that drawing operations
-     * can be performed on them.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @param {Boolean} [makeVisible] Whether to make the RGB channels visible.
-     * @return Chained reference to layer utilities.
-     */
-    layers.masks.makeRGBActive = function ()
-    {
-        // Parse args
-        var layerId, makeVisible;
-
-        if (typeof arguments[0] === 'number')
-        {
-            layerId = arguments[0];
-            makeVisible = arguments[1] || false;
-        }
-        else
-        {
-            makeVisible = arguments[0] || false;
-        }
-
-        var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), charIDToTypeID('RGB '));
-        _getLayerIdRef(layerId, ref);
-
-        var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putBoolean(charIDToTypeID('MkVs'), makeVisible);
-        executeAction(charIDToTypeID('slct'), desc, _dialogModesNo);
-
-        // Chaining
-        return layers;
-    };
-
-    /**
-     * Creates a selection from the layer mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @return Chained reference to layer utilities.
-     */
-    layers.masks.selectLayerMask = function (layerId)
-    {
-        var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Chnl'), charIDToTypeID('fsel'));
-
-        var ref2 = new ActionReference();
-        ref2.putEnumerated(charIDToTypeID('Chnl'), charIDToTypeID('Chnl'), charIDToTypeID('Msk '));
-        _getLayerIdRef(layerId, ref);
-
-        var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putReference(charIDToTypeID('T   '), ref2);
-        executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
-        return layers;
-    };
-
-    /**
-     * Creates a selection from the vector mask of the specified layer.
-     * @param {Number} [layerId] Layer identifier, defaults to currently active layer if null or not specified.
-     * @return Chained reference to layer utilities.
-     */
-    layers.masks.selectVectorMask = function (layerId)
-    {
-        var ref = new ActionReference();
-        ref.putProperty(charIDToTypeID('Chnl'), charIDToTypeID('fsel'));
-
-        var ref2 = new ActionReference();
-        ref2.putEnumerated(charIDToTypeID('Path'), charIDToTypeID('Path'), stringIDToTypeID('vectorMask'));
-        _getLayerIdRef(layerId, ref2);
-
-        var desc = new ActionDescriptor();
-        desc.putReference(charIDToTypeID('null'), ref);
-        desc.putReference(charIDToTypeID('T   '), ref2);
-
-        desc.putInteger(charIDToTypeID('Vrsn'), 1);
-        desc.putBoolean(stringIDToTypeID('vectorMaskParams'), true);
-        executeAction(charIDToTypeID('setd'), desc, _dialogModesNo);
-        return layers;
-    };
-
+    },
 
     // Public API
     /**
@@ -3493,6 +5840,9 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      * with than ItemIndexes because are unique and does not changed based on whether a background
      * layer is present in the document (see below).
      *
+     * Most functions default a null or undefined value passed to a layer id argument to reference the currently
+     * active layer. It is a huge convenience but also a debugging nightmare. Check your inputs and act accordingly.
+     *
      * Some brief notes about ItemIndexes: they behave differently when the background layer
      * is present in the document:
      *
@@ -3505,6 +5855,12 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
      * non-background layer is present in the document. This is true for LayerIds too.
      */
     Lifter.layers = layers;
+    log.debug("Lifter.layers done...");
 }());
 
+log.log("Lifter is ready now.");
 }).call($.global);
+}// if(typeof Lifter !== "object")
+/*!
+ * LIFTER IS READY NOW
+ */

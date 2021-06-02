@@ -3495,6 +3495,8 @@ $.strict = true;
 var _DEVBUILD = false;
 $.writeln("Starting Lifter...");
 
+_DEVBUILD = true;
+
 //=========================//
 //    WELCOME TO LIFTER    //
 //=========================//

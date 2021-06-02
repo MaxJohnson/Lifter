@@ -37,5 +37,7 @@ logs
 results
 #build
 .grunt
+.vscode
 
+dev/
 node_modules

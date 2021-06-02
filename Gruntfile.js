@@ -24,19 +24,35 @@ module.exports = function (grunt)
         release_dir = 'build/release',
 
         // Common
+        oldshim = [
+            'src/libs/es5/es5-shim.js'
+        ],
+        libs = [
+            'src/build/libs_header.js',
+            'src/libs/es5/extendscript-es5-shim.js',
+            'src/libs/json3.js',
+            'src/libs/polyfills.js',
+            'src/libs/extendscript_logfile.jsxinc',
+            'src/libs/extendscript_log.jsxinc',
+            'src/libs/extendscript_dialogs.jsxinc',
+            'src/build/libs_footer.js',
+        ],
         header = ['src/build/header.js'],
+        dev_flag = ['src/build/header_dev.js'],
         footer = ['src/build/footer.js'],
-        core = ['src/lifter.js', 'src/core/core.js', 'src/core/polyfills.js', 'src/core/utils.js'],
+        core = ['src/lifter.js', 'src/core/core.js', 'src/core/utils.js','src/core/colors.js'],
 
         // Single builds
         builds = {
             test: [].concat('src/test/test.js'),
-            documents: [].concat(header, core, 'src/modules/documents.js', footer),
-            filters: [].concat(header, core, 'src/modules/filters.js', footer),
-            history: [].concat(header, core, 'src/modules/history.js', footer),
-            layers: [].concat(header, core, 'src/modules/layers.js', footer),
-            selection: [].concat(header, core, 'src/modules/selection.js', footer),
-            full: [].concat(header, core, 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', footer),
+            documents: [].concat(libs, header, core, 'src/modules/documents.js', footer),
+            filters: [].concat(libs, header, core, 'src/modules/filters.js', footer),
+            history: [].concat(libs, header, core, 'src/modules/history.js', footer),
+            layers: [].concat(libs, header, core, 'src/modules/layers.js', footer),
+            selection: [].concat(libs, header, core, 'src/modules/selection.js', footer),
+            system: [].concat(libs, header, core, 'src/modules/system.js', footer),
+            full: [].concat(libs, header, core, 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
+            dev: [].concat(libs, header, dev_flag, core, 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
 
             // Custom build support
             // Just uncomment the following line and add the modules to the array
@@ -70,7 +86,7 @@ module.exports = function (grunt)
             config.concat.debug.files[path.join(debug_dir, 'lifter.' + build + '.js')] = builds[build];
 
             // Release
-            config.esmin.release.files[path.join(release_dir, 'lifter.' + build + '.min.js')] = builds[build];
+            config.esmin.release.files[path.join(release_dir, 'lifter.' + build + '.min.jsxinc')] = builds[build];
         }
     }
 

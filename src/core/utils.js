@@ -129,3 +129,50 @@ Number.prototype.clone = Boolean.prototype.clone = String.prototype.clone = func
 {
     return this;
 };
+
+/**
+ * Pads a number with zeros
+ * @param  {Interger}  padCount      Interger that is the desired number of digits
+ * @return {String} String with added zeros
+ */
+Number.prototype.pad = function (padCount)
+{
+    var absNum = Math.abs(this);
+    var zeros = Math.max(0, padCount - Math.floor(absNum).toString().length);
+    var zeroString = Math.pow(10, zeros).toString().substr(1);
+    if (this < 0) {
+        zeroString = '-' + zeroString;
+    }
+
+    return zeroString + absNum;
+};
+
+/**
+ * Shorten a string with ellipsis ...
+ * @param  {Interger}  maxLength      Interger that is the desired length including the ellipsis replacement
+ * @param  {String}    orientation    Part to chop out: "Start","Center", or "End"
+ * @param  {String}    ellipsisString String to put in place of chopped characters
+ * @return {String}                   Shortened string
+ */
+String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisString) {
+    ellipsisString = ellipsisString || "...";
+    if (this.length > maxLength) {
+        if (maxLength > ellipsisString.length)
+        {
+            switch (orientation) {
+                case "start":
+                    return ellipsisString + this.slice(-(maxLength - ellipsisString.length));
+                case "center":
+                    if (maxLength != ellipsisString.length + 1) {
+                        return this.slice(0, Math.floor(maxLength / 2) - Math.floor(ellipsisString.length / 2)) + ellipsisString + this.slice(-(Math.ceil(maxLength / 2) - Math.ceil(ellipsisString.length / 2)), this.length);
+                    }
+                case "end":
+                default:
+                    return this.slice(0, maxLength - ellipsisString.length) + ellipsisString;
+            }
+        } else {
+            return ellipsisString;
+        }
+    }
+    return this;
+};
