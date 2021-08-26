@@ -38,10 +38,13 @@ try {
 // Global public types
 
 /** init logging */
+// attaching to $.global scope so accessed as log.log, log.info, etc
+// should probably keep it namespaced...but user can make new log in root
+var log = Lifter.log = undefined;
 if( _DEVBUILD ) {
-    Lifter.log = new ExtendScript_Log($.global, 0, "Lifter", true, false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 0, true, false);
 } else {
-    Lifter.log = new ExtendScript_Log($.global, 4, "Lifter", false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 4, false);
 }
 
 if(typeof log !== 'object'){log = Lifter.log;}
