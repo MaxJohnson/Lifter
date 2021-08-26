@@ -14,6 +14,68 @@
  * limitations under the License.
  */
 
+
+
+/**
+ * Basic timer object for performance testing
+ * @constructor 
+ * @example
+    var myTime = new Lifter.Timer();
+    
+    for(var i=0; i < 10; i++) {
+        $.sleep(100);
+        log.log(myTime.getElapsed());
+    }
+    
+    myTime.stop();
+    
+    log.log(myTime.getTime());
+ */
+var Timer = Lifter.Timer = function Timer() {
+    // member variables
+    this.startTime = new Date();
+    this.endTime = new Date();
+
+    // member functions
+
+    /**
+    * reset the start time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.start = function () {
+        this.startTime = new Date();
+    }
+
+    /**
+    * reset the end time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.stop = function () {
+        this.endTime = new Date();
+    }
+
+    /**
+    * get the difference in milliseconds between start and stop
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getTime = function () {
+        return (this.endTime.getTime() - this.startTime.getTime()) / 1000;
+    }
+
+    /**
+    * get the current elapsed time from start to now, this sets the endTime
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getElapsed = function () {
+        this.endTime = new Date(); return this.getTime();
+    }
+}
+
+
 // Custom language extensions
 /**
  * Extends the object with the properties of the specified objects.
