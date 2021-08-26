@@ -22,6 +22,7 @@ module.exports = function (grunt)
         // Output tpaths
         debug_dir = 'build/debug',
         release_dir = 'build/release',
+        jsbin_dir = 'build/bin',
 
         // Common
         oldshim = [
@@ -50,9 +51,10 @@ module.exports = function (grunt)
             history: [].concat(libs, header, core, 'src/modules/history.js', footer),
             layers: [].concat(libs, header, core, 'src/modules/layers.js', footer),
             selection: [].concat(libs, header, core, 'src/modules/selection.js', footer),
+            layerComps: [].concat(libs, header, core, 'src/modules/layerComps.js', footer),
             system: [].concat(libs, header, core, 'src/modules/system.js', footer),
-            full: [].concat(libs, header, core, 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
-            dev: [].concat(libs, header, dev_flag, core, 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
+            full: [].concat(libs, header, core, 'src/modules/layerComps.js', 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
+            dev: [].concat(libs, header, dev_flag, core, 'src/modules/layerComps.js', 'src/modules/documents.js', 'src/modules/filters.js', 'src/modules/history.js', 'src/modules/layers.js', 'src/modules/selection.js', 'src/modules/system.js', footer),
 
             // Custom build support
             // Just uncomment the following line and add the modules to the array
@@ -62,8 +64,9 @@ module.exports = function (grunt)
         // Grunt config
         config = {
             clean: {
-                debug: ['build/debug'],
-                release: ['build/release'],
+                debug: [debug_dir],
+                release: [release_dir],
+                jsbin: [path.join(jsbin_dir,'*.jsx')],
             },
             concat: {
                 debug: {
@@ -74,6 +77,14 @@ module.exports = function (grunt)
                 release: {
                     files: {},
                 },
+                jsbin: {
+                    files: {},
+                }
+            },
+            run: {
+                jsbin: {
+                    exec:'node "src/build/exportToJSX.js" --force -n ' + jsbin_dir,
+                }
             },
         };
 
@@ -87,6 +98,9 @@ module.exports = function (grunt)
 
             // Release
             config.esmin.release.files[path.join(release_dir, 'lifter.' + build + '.min.jsxinc')] = builds[build];
+
+            // JSBin
+            config.esmin.jsbin.files[path.join(jsbin_dir, 'lifter.' + build + '.jsx')] = builds[build];
         }
     }
 
@@ -97,8 +111,10 @@ module.exports = function (grunt)
     grunt.loadNpmTasks('grunt-contrib-clean');
     grunt.loadNpmTasks('grunt-contrib-concat');
     grunt.loadNpmTasks('grunt-esmin');
+    grunt.loadNpmTasks('grunt-run');
 
     // Register tasks
     grunt.registerTask('debug', ['clean:debug', 'concat:debug']);
     grunt.registerTask('release', ['clean:release', 'esmin:release']);
+    grunt.registerTask('bin', ['clean:jsbin', 'esmin:jsbin', 'run:jsbin', 'clean:jsbin']);
 };

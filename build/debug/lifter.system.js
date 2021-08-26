@@ -3547,10 +3547,13 @@ try {
 // Global public types
 
 /** init logging */
+// attaching to $.global scope so accessed as log.log, log.info, etc
+// should probably keep it namespaced...but user can make new log in root
+var log = Lifter.log = undefined;
 if( _DEVBUILD ) {
-    Lifter.log = new ExtendScript_Log($.global, 0, "Lifter", true, false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 0, true, false);
 } else {
-    Lifter.log = new ExtendScript_Log($.global, 4, "Lifter", false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 4, false);
 }
 
 if(typeof log !== 'object'){log = Lifter.log;}
@@ -4218,6 +4221,68 @@ log.log("Lifter core done.");
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
+
+/**
+ * Basic timer object for performance testing
+ * @constructor 
+ * @example
+    var myTime = new Lifter.Timer();
+    
+    for(var i=0; i < 10; i++) {
+        $.sleep(100);
+        log.log(myTime.getElapsed());
+    }
+    
+    myTime.stop();
+    
+    log.log(myTime.getTime());
+ */
+var Timer = Lifter.Timer = function Timer() {
+    // member variables
+    this.startTime = new Date();
+    this.endTime = new Date();
+
+    // member functions
+
+    /**
+    * reset the start time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.start = function () {
+        this.startTime = new Date();
+    }
+
+    /**
+    * reset the end time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.stop = function () {
+        this.endTime = new Date();
+    }
+
+    /**
+    * get the difference in milliseconds between start and stop
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getTime = function () {
+        return (this.endTime.getTime() - this.startTime.getTime()) / 1000;
+    }
+
+    /**
+    * get the current elapsed time from start to now, this sets the endTime
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getElapsed = function () {
+        this.endTime = new Date(); return this.getTime();
+    }
+}
+
 
 // Custom language extensions
 /**
@@ -4908,155 +4973,6 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
         // return list of copied files
         return result;
     };
-    // system.files.copy = function copyFiles( src, dst, options ) {
-    //     // mutable vars accept file path or File/Folder handle...
-    //     var srcFile = new File(src);
-    //     var dstFile = new File(dst);
-    //
-    //     // if folder, pass to copyDir like a snake eating its tail
-    //     if (File(srcFile) instanceof Folder)
-    //     {
-    //         return system.files.copyDir(src, dst, options);
-    //     }
-    //
-    //     // if dst is folder, copy file name from src
-    //     if (File(dstFile) instanceof Folder)
-    //     {
-    //         dstFile = new File(dstFile.fsName+"/"+srcFile.name);
-    //     }
-    //
-    //     var newFile;
-    //
-    //     var newFileName,
-    //         newFilePath;
-    //
-    //     var newFolder = dstFile.parent;
-    //
-    //     // Passed Options
-    //     if(typeof options !== "object") options = {};
-    //     options.defaults(
-    //         {
-    //             overwrite: true,
-    //             silent: false,
-    //             unlock:true,
-    //             nameOnly:true,
-    //             masks:[],
-    //             excludes:[],
-    //             replacements:[],
-    //             dialogId:1038876
-    //         }
-    //     );
-    //
-    //     var maskPathType = (options.nameOnly)? 'name' : 'absoluteURI';
-    //
-    //     // Dialog setup
-    //     var dialogId = 1038876;
-    //     var dialogArgs = { id:dialogId, skippable:true, buttons:["OK","Skip"]};
-    //         dialogArgs.title = "Overwrite File?";
-    //         dialogArgs.text = "Do you want to overwrite existing files?";
-    //     var dialogResult;
-    //     Lifter.dialogs.clearCached(dialogId);// clear or subsequent non-recursive calls pick up old input
-    //
-    //     // log.log( "---  src  ---" );
-    //     // log.log( src );
-    //
-    //     log.log( "\n[]------  system.files.copy()  ------[]" );
-    //     log.log( "options:" );
-    //     for(var opt in options)
-    //     {
-    //      if( !options.hasOwnProperty (opt) ) continue;
-    //      log.log( "- "+opt+":" + options[opt] );
-    //     }
-    //
-    //     // log.log( "Src File: " + srcFile );
-    //     // log.log( "Dst File: " + dstFile );
-    //
-    //     // sanity check
-    //     // log.log( "srcFile.exists "+srcFile.exists );
-    //     // log.log( "srcFile.fsName "+srcFile.fsName );
-    //     if (!srcFile.exists || srcFile.name === ".DS_Store") { return; }
-    //
-    //     // Mask tests to filter files
-    //
-    //     if(system.files.maskTest(srcFile[maskPathType], options.masks) === false){return;}
-    //     if(system.files.excludeTest(srcFile[maskPathType], options.excludes) === false){return;}
-    //
-    //     // create folder if missing
-    //     if(!system.files.makeDir(newFolder)) { return; }
-    //
-    //     // replace text in file name
-    //     if(options.nameOnly) {
-    //
-    //     }
-    //     newFileName = dstFile.name;
-    //     for(var r=0;r<options.replacements.length;r++)
-    //     {
-    //         var rep = options.replacements[r];
-    //         newFileName = newFileName.replace(new RegExp(rep[0],'g'),rep[1]);
-    //     }
-    //
-    //     newFilePath = newFolder.fsName + "/" + newFileName;
-    //
-    //     log.log("-- Src: "+srcFile.fsName);
-    //     log.log("-- Dst: "+new Folder(newFilePath).fsName);
-    //
-    //
-    //     newFile = File(newFilePath);
-    //     log.log("--- newFile.exists "+newFile.exists+" ---");
-    //
-    //     // if file exists and not silent mode, bring up confirm dialog
-    //     if (newFile.exists && options.silent === false && typeof Lifter.dialogs.confirm === "function")
-    //     {
-    //         // Message
-    //         if(!newFile.readonly)
-    //         {
-    //             dialogArgs.text = "\"" + newFile.name + "\" already exists. Do you want to overwrite it?";
-    //         }else{
-    //             dialogArgs.text = "\"" + newFile.name + "\" is set to Read-Only. It may be locked by Perforce. Do you want to overwrite it?";
-    //         }
-    //
-    //         dialogResult = Lifter.dialogs.confirm (dialogArgs);
-    //         dialogCache = Lifter.dialogs.getCached(dialogId);
-    //
-    //         options.overwrite = (dialogCache && dialogCache.value !== 1);
-    //         options.silent = (dialogCache && dialogCache.skip === true);
-    //
-    //         log.debug("dialogResult: " + (dialogResult));
-    //         log.debug("dialogCache: " + (dialogCache));
-    //         // log.log("dialogCache.value: " + (dialogCache.value));
-    //         // for(var opt in options)
-    //         // {
-    //         //     if( !options.hasOwnProperty (opt) ) continue;
-    //         //     log.log( opt+":" + options[opt] );
-    //         // }
-    //     }
-    //
-    //     // Copy or skip?
-    //     if( !newFile.exists || options.overwrite )
-    //     {
-    //         try {
-    //             srcFile.copy(newFilePath);
-    //         } catch (e) {
-    //             log.error(e.message);
-    //             return;// "error:copyFiles:could not copy file "+newFilePath+":"+ e.message;
-    //         }
-    //
-    //         // Sanity check and return error if missing
-    //         newFile = File(newFilePath);
-    //         if (! newFile.exists){
-    //             log.error("copyFiles:file not created "+newFilePath+ ", "+ newFile.error);
-    //             return;
-    //         }
-    //
-    //         // make writeable
-    //         if(options.unlock) newFile.readonly = false;
-    //
-    //         // return copied file wrapped in array
-    //         return [newFile];
-    //     } else {
-    //         log.log ("User skipped this one...");
-    //     }
-    // };
 
 
     /**
@@ -5164,27 +5080,6 @@ String.prototype.ellipsis = function ellipsis(maxLength, orientation, ellipsisSt
                 }
     		}
             else if (srcFile instanceof Folder) {
-
-                // newSubFolder = new Folder(newFilePath);
-                //
-                // // Mask tests to filter folders... but just to avoid making
-                // // random empty directories, don't stop the search.
-                // maskTest = system.files.maskTest(srcFolder.absoluteURI, options.masks);
-                // excludeTest = system.files.excludeTest(srcFolder.absoluteURI, options.excludes);
-                // if(maskTest && excludeTest) {
-                //     try {
-                //
-                //         if( newSubFolder.create() === false )
-                //         {
-                //             log.error("copyFiles:error creating sub-directory "+newSubFolder.fsName);
-        	    //             return;
-                //         }
-                //     } catch (e) {
-                //         log.error(e.message);
-                //         return;
-                //     }
-                // }
-                // result = result.concat(system.files.copyDir(srcFile, newSubFolder, options));
                 result = result.concat(system.files.copyDir(srcFile, newFilePath, options));
             }
             else {

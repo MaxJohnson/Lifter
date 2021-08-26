@@ -3547,10 +3547,13 @@ try {
 // Global public types
 
 /** init logging */
+// attaching to $.global scope so accessed as log.log, log.info, etc
+// should probably keep it namespaced...but user can make new log in root
+var log = Lifter.log = undefined;
 if( _DEVBUILD ) {
-    Lifter.log = new ExtendScript_Log($.global, 0, "Lifter", true, false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 0, true, false);
 } else {
-    Lifter.log = new ExtendScript_Log($.global, 4, "Lifter", false);
+    Lifter.log = new ExtendScript_Log($.global, "Lifter", 4, false);
 }
 
 if(typeof log !== 'object'){log = Lifter.log;}
@@ -4218,6 +4221,68 @@ log.log("Lifter core done.");
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+
+
+/**
+ * Basic timer object for performance testing
+ * @constructor 
+ * @example
+    var myTime = new Lifter.Timer();
+    
+    for(var i=0; i < 10; i++) {
+        $.sleep(100);
+        log.log(myTime.getElapsed());
+    }
+    
+    myTime.stop();
+    
+    log.log(myTime.getTime());
+ */
+var Timer = Lifter.Timer = function Timer() {
+    // member variables
+    this.startTime = new Date();
+    this.endTime = new Date();
+
+    // member functions
+
+    /**
+    * reset the start time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.start = function () {
+        this.startTime = new Date();
+    }
+
+    /**
+    * reset the end time to now
+    * @function start
+    * @memberOf Timer#
+    */
+    this.stop = function () {
+        this.endTime = new Date();
+    }
+
+    /**
+    * get the difference in milliseconds between start and stop
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getTime = function () {
+        return (this.endTime.getTime() - this.startTime.getTime()) / 1000;
+    }
+
+    /**
+    * get the current elapsed time from start to now, this sets the endTime
+    * @function start
+    * @memberOf Timer#
+    */
+    this.getElapsed = function () {
+        this.endTime = new Date(); return this.getTime();
+    }
+}
+
 
 // Custom language extensions
 /**

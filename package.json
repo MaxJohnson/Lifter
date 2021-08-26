@@ -3,7 +3,9 @@
     "grunt": "~0.4.2",
     "grunt-contrib-concat": "~0.4.0",
     "grunt-esmin": "~0.1.0",
-    "grunt-contrib-clean": "^0.5.0"
+    "grunt-contrib-clean": "^0.5.0",
+    "grunt-run": "^0.8.1",
+    "@esdebug/esdebugger-core": "^0.1.0"
   },
   "private": true,
   "devDependencies": {}
