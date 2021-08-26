@@ -538,7 +538,8 @@
             set: false,
         },
 
-        // NOTE: this does not indicate that a layer is a group or set. use 'type' prop for that.
+        // NOTE: this does NOT indicate that a layer is a group or set. use 'type' prop for that.
+        // True if layer is 'clipped' (has 'clipping mask') onto a group or layer below it.
         'group': { typeId: c2id('Grup'), type: DescValueType.BOOLEANTYPE, set: false, },
 
         'hasLayerMask': { typeId: s2id('hasUserMask'), type: DescValueType.BOOLEANTYPE, set: false, },
@@ -1774,11 +1775,11 @@
         while (--i > n && depth > 0)
         {
             layerId = layers.getLayerIdByItemIndex(i);
-            if( layers.prop(layerId, "type") == LayerType.SETSTART ) {
+            if ( layers.prop(layerId, "type") == LayerType.SETSTART ) {
                 if(depth == 1 || doAll) { childIDs.push(layerId); }
                 depth ++;
             }
-            else if( layers.prop(layerId, "type") == LayerType.SETEND ) {
+            else if ( layers.prop(layerId, "type") == LayerType.SETEND ) {
                 depth --;
                 if(depth < 1) { break; }// we are at bottom of our target layer group
             }
@@ -1790,6 +1791,59 @@
 
         return childIDs;
     };
+    
+    /**
+     * Gets an id list of layers whos clipping mask is affected by the active or specified layer.
+     * @param {Number} [layerId=Active layer] Layer or group to start from.
+     * @param {Boolean} [doAll] If true, searches parent groups for clipped layers.
+     * @return {Number[]} LayerIds of the all 'clipped' layers affected.
+     */
+     layers.getClippedIds = function (inLayerId, doAll)
+     {
+         var n;
+         var i;
+         var layerId;
+         var layerType;
+         var clippedIds = [];
+         var depth = 1;//if < 1, we are deeper in nested groups
+ 
+         //allow for getClippedIds(true);
+         if (typeof inLayerId === 'boolean') { doAll = inLayerId; }
+         if (typeof inLayerId !== 'number') { inLayerId = layers.prop('layerId'); }
+ 
+         _cache.refresh();
+         n = _cache['layerCount'] + 1;
+         i = layers.prop(inLayerId, 'itemIndex');
+ 
+         while (++i < n)
+         {
+             layerId = layers.getLayerIdByItemIndex(i);
+             layerType = layers.prop(layerId, "type");
+             // if group start, check depth, reset depth if doAll
+             if ( layerType == LayerType.SETSTART ) {
+                 if(depth > 0) {
+                     if(doAll) {
+                         depth = 0;
+                     } else {
+                         break;
+                     }
+                 }
+                 depth ++;
+             } else if ( layerType == LayerType.SETEND ) {
+                 depth --;// setend indicates 'bottom' of a sibling group
+             } else if (depth > 0) {
+                 // ignore if not in same group or parent group
+                 // escape if not 'clipped' or doAll
+                 if(layers.prop(layerId, "group")) {
+                    clippedIds.push(layerId);
+                 } else if (!doAll) {
+                     break;
+                 }
+             }
+         }
+ 
+         return clippedIds;
+     };
 
     /**
      * Gets the identifier of all layers.
@@ -1815,10 +1869,10 @@
         var docDesc = executeActionGet(docRef);
 
         // Get target layer ids
-        if( docDesc.hasKey(s2id('targetLayersIDs'))) {
+        if ( docDesc.hasKey(s2id('targetLayersIDs'))) {
             targetLayersIDsDesc = docDesc.getList( s2id('targetLayersIDs'));
 
-            for(var ii = 0; ii < targetLayersIDsDesc.count; ii++) {
+            for (var ii = 0; ii < targetLayersIDsDesc.count; ii++) {
                 activeLayerIds.push(Number(targetLayersIDsDesc.getReference( ii ).getIdentifier()));
             }
         }
@@ -2022,6 +2076,8 @@
      */
     layers.stack.makeActive = function (layerIdList, makeVisible, add)
     {
+        var layerId;
+
         // clear active if not adding
         if ( add !== true )
             layers.stack.makeNoneActive();
@@ -2029,7 +2085,7 @@
         //support single layer selection
         layerIdList = [].concat(layerIdList);
 
-        for(i=0; i<layerIdList.length; i++) {
+        for (var i=0; i<layerIdList.length; i++) {
             layerId = layerIdList[i];
             if (typeof layerId !== 'number' || layerId < 1)
                 throw new Error('Invalid layerId: ' + layerId);
@@ -2116,10 +2172,9 @@
 
 
     /**
-     * Move a number of layers into the bottom of a group.
+     * Get the index of the last item in a layer group.
      * @method
      * @param  {(Number|null)} [groupId=active layer] Id of the target group layer (defaults to selected)
-     * @param  {Number[]} [layerIds=Active layers] Array of layer Ids to move
      * @return Chained reference to layer utilities.
      */
     layers.groups.getEndIndex = function groupsGetBottomIndex (groupId) {
@@ -2160,6 +2215,7 @@
         // var isGroup = layers.isGroup(layerId);
         return i;
     };
+
 
     /**
      * Make a new group with option to add layers from selected or Id array
@@ -2296,6 +2352,7 @@
         return layers;
     };
 
+
     /**
      * Move a number of layers to after (below) the target layer in the stack.
      * @method
@@ -2310,6 +2367,7 @@
         // layers.move(layerIds, newIndex);
         return layers;
     };
+
 
     /**
      * Move any number of layers to the target index in the stack, with optional
@@ -2420,6 +2478,12 @@
 
                         // get last child in target group
                         lastChildId = children[children.length-1];
+                        // var layerDOM = layers.toDOM(layerId);
+                        // // var targetDOM = layers.toDOM(targetId);
+                        // var lastChildDom = layers.toDOM(lastChildId);
+                        // layerDOM.move(lastChildDom,ElementPlacement.PLACEAFTER);
+
+
                         lastChildIndex = layers.prop(lastChildId, 'itemIndex');
 
                         // add temp layer
@@ -2438,6 +2502,7 @@
 
                         // Thanks! I hate it.
                         layers.remove(tmpLayerId);
+                        
                     } else {
                         newIndex --;
                     }
